@@ -16,6 +16,9 @@ class PreloadScene extends Phaser.Scene {
             this.load.image('test' + i, 'assets/images/ui/loading-background.png');
         }
 
+        // Load generic boss icon
+        this.load.image('boss_icon', 'assets/images/enemies/boss.png');
+
         this.load.on('progress', (percent) => {
             loadingBar.fillRect(0, this.game.renderer.height / 2, this.game.renderer.width * percent, 50);
         });

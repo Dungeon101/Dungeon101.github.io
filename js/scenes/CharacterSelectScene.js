@@ -82,7 +82,8 @@ class CharacterSelectScene extends Phaser.Scene {
     startAdventure() {
         if (this.selectedCharacters.length === 4) {
             console.log('Starting adventure with party:', this.selectedCharacters);
-            this.scene.start('DungeonScene', { party: this.selectedCharacters });
+            gameState.initializeParty(this.selectedCharacters);
+            this.scene.start('DungeonScene');
         } else {
             console.log('Please select 4 characters');
         }

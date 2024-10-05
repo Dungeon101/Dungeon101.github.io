@@ -6,13 +6,23 @@ class DungeonScene extends Phaser.Scene {
         this.dungeonHeight = 20;
         this.currentFloor = 1;
         this.player = null;  // Initialize player as null
+        this.party = null;  // Initialize party as null
     }
 
     init(data) {
         this.DungeonGenerator = this.registry.get('DungeonGenerator');
-        this.currentFloor = data.newFloor || 1;  // Reset to 1 if not specified
-        this.party = data.party || this.party;
-        this.isBossFloor = this.currentFloor % 5 === 0;
+        gameState.currentFloor = data.newFloor || gameState.currentFloor;
+        
+        if (!gameState.party) {
+            gameState.initializeParty([
+                { name: 'Warrior', health: 100, attack: 20 },
+                { name: 'Mage', health: 70, attack: 30 },
+                { name: 'Rogue', health: 80, attack: 25 },
+                { name: 'Healer', health: 90, attack: 15 }
+            ]);
+        }
+        
+        this.isBossFloor = gameState.currentFloor % 5 === 0;
         this.player = null;  // Reset player to null on init
         this.generateNewFloor();
     }
@@ -31,6 +41,7 @@ class DungeonScene extends Phaser.Scene {
         // Add these lines for boss images
         this.load.image('skeleton_boss', 'assets/images/enemies/skeleton_boss.png');
         this.load.image('goblin_boss', 'assets/images/enemies/goblin_boss.png');
+        this.load.image('boss_icon', 'assets/images/enemies/boss.png');
     }
 
     create() {
@@ -116,8 +127,8 @@ class DungeonScene extends Phaser.Scene {
             this.boss = this.physics.add.sprite(
                 (bossRoom.x + bossRoom.width / 2) * this.tileSize,
                 (bossRoom.y + bossRoom.height / 2) * this.tileSize,
-                bossType
-            ).setScale(this.tileSize / 256);
+                'boss_icon' // Use the generic boss icon
+            ).setScale((this.tileSize / 256) * 1.5); // Make the boss 1.5 times larger
             this.boss.defeated = false;
             this.physics.add.overlap(this.player, this.boss, this.startBossFight, null, this);
         } else {
@@ -173,26 +184,8 @@ class DungeonScene extends Phaser.Scene {
 
     startCombat(player, enemy) {
         enemy.destroy();  // Remove the enemy from the map
-        this.scene.launch('CombatScene', { 
-            party: this.party, 
-            currentFloor: this.currentFloor
-        });
+        this.scene.launch('CombatScene', { isBossFight: this.isBossFloor });
         this.scene.pause();
-    }
-
-    resume(data) {
-        if (data && data.party) {
-            this.party = data.party;
-            if (this.party.every(member => member.health <= 0)) {
-                // All party members are defeated
-                this.scene.start('CharacterSelectScene');
-            } else {
-                // Check if boss is defeated and move to next floor if necessary
-                if (this.isBossFloor && this.boss && this.boss.defeated) {
-                    this.goToNextFloor();
-                }
-            }
-        }
     }
 
     startBossFight() {
@@ -204,8 +197,17 @@ class DungeonScene extends Phaser.Scene {
         this.scene.pause();
     }
 
+    resume(data) {
+        if (gameState.party.every(member => member.currentHealth <= 0)) {
+            gameState.resetGame();
+            this.scene.start('CharacterSelectScene');
+        } else if (this.isBossFloor && this.boss && this.boss.defeated) {
+            this.goToNextFloor();
+        }
+    }    
+
     goToNextFloor() {
-        this.currentFloor++;
-        this.scene.restart({ newFloor: this.currentFloor, party: this.party });
+        gameState.currentFloor++;
+        this.scene.restart({ newFloor: gameState.currentFloor });
     }
 }
