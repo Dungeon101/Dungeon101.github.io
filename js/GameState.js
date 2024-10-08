@@ -2,6 +2,7 @@ class GameState {
     constructor() {
         this.party = null;
         this.currentFloor = 1;
+        this.bossDefeated = false;
     }
 
     initializeParty(party) {
@@ -22,6 +23,12 @@ class GameState {
     resetGame() {
         this.party = null;
         this.currentFloor = 1;
+        this.bossDefeated = false;
+    }
+
+    // New method to check if current floor is a boss floor
+    isBossFloor() {
+        return this.currentFloor % 5 === 0;
     }
 }
 

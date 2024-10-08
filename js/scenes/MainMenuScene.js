@@ -6,7 +6,7 @@ class MainMenuScene extends Phaser.Scene {
     create() {
         console.log('Main Menu Scene');
         
-        const title = this.add.text(this.cameras.main.centerX, 100, 'Darkest Dungeon-like Game', {
+        const title = this.add.text(this.cameras.main.centerX, 100, 'Dungeon101', {
             font: '32px Arial',
             fill: '#ffffff'
         }).setOrigin(0.5);

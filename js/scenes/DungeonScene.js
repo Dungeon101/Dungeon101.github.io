@@ -59,7 +59,7 @@ class DungeonScene extends Phaser.Scene {
 
         this.cursors = this.input.keyboard.createCursorKeys();
 
-        this.floorText = this.add.text(16, 16, `Floor: ${this.currentFloor}`, { font: '18px Arial', fill: '#ffffff' })
+        this.floorText = this.add.text(16, 16, `Floor: ${gameState.currentFloor}`, { font: '18px Arial', fill: '#ffffff' })
             .setScrollFactor(0)
             .setDepth(10);
 
@@ -80,6 +80,7 @@ class DungeonScene extends Phaser.Scene {
 
         // Add this event listener
         this.events.on('wake', this.onWake, this);
+        this.events.on('resume', (sys, data) => this.onSceneResume(sys, data));
     }
 
     createDungeonGraphics() {
@@ -121,14 +122,13 @@ class DungeonScene extends Phaser.Scene {
     }
 
     createStairs() {
-        if (this.isBossFloor) {
+        if (gameState.isBossFloor()) {
             let bossRoom = this.dungeon.rooms[this.dungeon.rooms.length - 1];
-            let bossType = Math.random() < 0.5 ? 'skeleton_boss' : 'goblin_boss';
             this.boss = this.physics.add.sprite(
                 (bossRoom.x + bossRoom.width / 2) * this.tileSize,
                 (bossRoom.y + bossRoom.height / 2) * this.tileSize,
-                'boss_icon' // Use the generic boss icon
-            ).setScale((this.tileSize / 256) * 1.5); // Make the boss 1.5 times larger
+                'boss_icon'
+            ).setScale((this.tileSize / 256) * 1.5);
             this.boss.defeated = false;
             this.physics.add.overlap(this.player, this.boss, this.startBossFight, null, this);
         } else {
@@ -137,7 +137,7 @@ class DungeonScene extends Phaser.Scene {
                 (endRoom.x + endRoom.width / 2) * this.tileSize,
                 (endRoom.y + endRoom.height / 2) * this.tileSize,
                 'stairs'
-            ).setScale(this.tileSize / 256);  // Scale down from 256x256 to tileSize x tileSize
+            ).setScale(this.tileSize / 256);
         }
     }
 
@@ -151,6 +151,7 @@ class DungeonScene extends Phaser.Scene {
                     'enemy'
                 ).setScale(this.tileSize / 256);  // Scale down from 256x256 to tileSize x tileSize
                 enemy.setCollideWorldBounds(true);
+                enemy.isBoss = false;  // Add this line to explicitly mark as not a boss
             }
         });
     }
@@ -182,9 +183,20 @@ class DungeonScene extends Phaser.Scene {
         }
     }
 
+    onSceneResume(sys, data) {
+        if (data && data.combatVictory) {
+            if (data.bossDefeated) {
+                this.goToNextFloor(true);  // Pass true to indicate boss defeat
+            } else {
+                // Handle regular enemy defeat
+                // You might want to remove the defeated enemy sprite here
+            }
+        }
+    }
+
     startCombat(player, enemy) {
         enemy.destroy();  // Remove the enemy from the map
-        this.scene.launch('CombatScene', { isBossFight: this.isBossFloor });
+        this.scene.launch('CombatScene', { isBossFight: enemy.isBoss });  // Pass isBossFight based on the enemy type
         this.scene.pause();
     }
 
@@ -206,8 +218,10 @@ class DungeonScene extends Phaser.Scene {
         }
     }    
 
-    goToNextFloor() {
-        gameState.currentFloor++;
+    goToNextFloor(afterBossFight = false) {
+        if (!afterBossFight) {
+            gameState.currentFloor++;  // Only increment if it's not after a boss fight
+        }
         this.scene.restart({ newFloor: gameState.currentFloor });
     }
 }

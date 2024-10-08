@@ -18,7 +18,6 @@ class CombatScene extends Phaser.Scene {
     }
 
     preload() {
-        // Load character and enemy sprites
         this.combatants.forEach(char => {
             this.load.image(char.name.toLowerCase(), `assets/images/characters/${char.name.toLowerCase()}.png`);
         });
@@ -33,24 +32,24 @@ class CombatScene extends Phaser.Scene {
     }
 
     create() {
-        // Add the background image
         this.add.image(400, 300, 'combat-bg').setOrigin(0.5);
 
         this.add.text(400, 30, 'Combat', { font: '32px Arial', fill: '#ffffff' }).setOrigin(0.5);
 
         // Set up party
         const partyPositions = [
-            { x: 100, y: 200 },
-            { x: 100, y: 300 },
-            { x: 100, y: 400 },
-            { x: 100, y: 500 }
+            { x: 50, y: 300 },
+            { x: 150, y: 300 },
+            { x: 250, y: 300 },
+            { x: 350, y: 300 }
         ];
 
         this.combatants.forEach((char, index) => {
             let pos = partyPositions[index];
             let charSprite = this.add.image(pos.x, pos.y, char.name.toLowerCase()).setScale(0.4);
-            let healthBar = this.createHealthBar(pos.x + 100, pos.y, char.health, char.maxHealth);
-            let nameText = this.add.text(pos.x + 100, pos.y - 30, char.name, 
+            let healthBar = new HealthBar(this, pos.x, pos.y + 50, 100, 10);
+            healthBar.setHealth(char.health, char.maxHealth);
+            let nameText = this.add.text(pos.x, pos.y - 50, char.name, 
                 { font: '14px Arial', fill: '#ffffff' }).setOrigin(0.5);
             char.sprite = charSprite;
             char.healthBar = healthBar;
@@ -60,25 +59,39 @@ class CombatScene extends Phaser.Scene {
         // Set up enemies
         this.enemies = this.generateEnemies();
         const enemyPositions = [
-            { x: 700, y: 200 },
-            { x: 700, y: 300 },
-            { x: 700, y: 400 }
+            { x: 450, y: 300 },
+            { x: 550, y: 300 },
+            { x: 650, y: 300 },
+            { x: 750, y: 300 }
         ];
 
+        // Boss position
+        const bossPosition = { x: 600, y: 300 };
+
         this.enemies.forEach((enemy, index) => {
-            let pos = enemyPositions[index];
+            let pos = enemy.isBoss ? bossPosition : enemyPositions[index];
             let enemySprite = this.add.image(pos.x, pos.y, enemy.type).setScale(0.4);
-            if (enemy.type.includes('boss')) {
-                enemySprite.setScale(0.6); // Make boss 1.5 times larger than regular enemies
+            let nameTextY = pos.y - 50;
+            let healthBarY = pos.y + 50;
+            let hpTextY = pos.y + 70;
+            
+            if (enemy.isBoss) {
+                enemySprite.setScale(0.6);
+                nameTextY = pos.y - 150;
+                healthBarY = pos.y + 170;
+                hpTextY = pos.y + 190;
             }
-            let healthBar = this.createHealthBar(pos.x - 100, pos.y, enemy.health, enemy.maxHealth);
-            let nameText = this.add.text(pos.x - 100, pos.y - 30, enemy.name, 
+            
+            let healthBar = new HealthBar(this, pos.x, healthBarY, 100, 10);
+            healthBar.setHealth(enemy.health, enemy.maxHealth);
+            let nameText = this.add.text(pos.x, nameTextY, enemy.name, 
                 { font: '14px Arial', fill: '#ffffff' }).setOrigin(0.5);
             this.combatants.push({ 
                 ...enemy, 
                 sprite: enemySprite, 
                 healthBar: healthBar, 
-                nameText: nameText, 
+                nameText: nameText,
+                hpTextY: hpTextY,
                 isEnemy: true 
             });
         });
@@ -98,7 +111,16 @@ class CombatScene extends Phaser.Scene {
 
     generateEnemies() {
         if (this.isBossFight) {
-            return [this.generateBoss()];
+            let bossType = Phaser.Math.RND.pick(['skeleton', 'goblin']);
+            let health = bossType === 'skeleton' ? 200 : 150;
+            return [{
+                name: bossType.charAt(0).toUpperCase() + bossType.slice(1) + ' Boss',
+                type: bossType + '_boss',
+                health: health,
+                maxHealth: health,
+                attack: bossType === 'skeleton' ? 20 : 25,
+                isBoss: true
+            }];
         } else {
             let enemyCount = Phaser.Math.Between(1, 3);
             let enemies = [];
@@ -198,7 +220,7 @@ class CombatScene extends Phaser.Scene {
         // Add a delay before the enemy attacks
         this.time.delayedCall(1000, () => {
             this.attack(enemy, target);
-            enemy.nameText.setStyle({ fill: '#ffffff' });  // Remove highlight
+            enemy.nameText.setStyle({ fill: '#ffffff' });
             
             this.time.delayedCall(1000, () => {
                 this.currentTurn = (this.currentTurn + 1) % this.combatants.length;
@@ -212,7 +234,7 @@ class CombatScene extends Phaser.Scene {
         target.health = Math.max(0, target.health - damage);
 
         // Update health bar
-        this.updateHealthBar(target.healthBar, target.sprite.x, 300, 100, 10, target.health, target.maxHealth);
+        target.healthBar.setHealth(target.health, target.maxHealth);
 
         // Create attack effect
         let effect = this.add.image(target.sprite.x, target.sprite.y, 'attack-effect');
@@ -236,7 +258,7 @@ class CombatScene extends Phaser.Scene {
 
         if (target.health <= 0) {
             target.sprite.setAlpha(0.5);
-            target.healthBar.clear();
+            target.healthBar.bar.destroy();  // Use bar.destroy() instead of clear()
         }
 
         this.updateCombatantInfo();
@@ -249,8 +271,8 @@ class CombatScene extends Phaser.Scene {
         this.combatantInfo = [];
 
         this.combatants.forEach((combatant, index) => {
-            let x = combatant.isEnemy ? combatant.sprite.x - 100 : combatant.sprite.x + 100;
-            let y = combatant.sprite.y + 30;
+            let x = combatant.sprite.x;
+            let y = combatant.hpTextY;  // Use the stored hpTextY value
             let info = this.add.text(x, y, `HP: ${combatant.health}/${combatant.maxHealth}`, 
                 { font: '12px Arial', fill: '#ffffff', align: 'center' }).setOrigin(0.5);
             this.combatantInfo.push(info);
@@ -280,37 +302,16 @@ class CombatScene extends Phaser.Scene {
                 gameState.updatePartyHealth(this.combatants.filter(c => !c.isEnemy));
 
                 if (this.isBossFight) {
-                    let dungeonScene = this.scene.get('DungeonScene');
-                    if (dungeonScene.boss) {
-                        dungeonScene.boss.defeated = true;
-                    }
+                    gameState.bossDefeated = true;
+                    gameState.currentFloor++;  // Increment floor number here
                 }
                 this.scene.stop();
-                this.scene.resume('DungeonScene');
+                this.scene.resume('DungeonScene', { combatVictory: true, bossDefeated: this.isBossFight });
             } else {
                 gameState.resetGame();
                 this.scene.stop('DungeonScene');
                 this.scene.start('CharacterSelectScene');
             }
         });
-    }
-
-    createHealthBar(x, y, health, maxHealth) {
-        let width = 100;
-        let height = 10;
-        let border = this.add.graphics();
-        border.lineStyle(2, 0xffffff, 1);
-        border.strokeRect(x - width/2, y - height/2, width, height);
-        
-        let healthBar = this.add.graphics();
-        this.updateHealthBar(healthBar, x, y, width, height, health, maxHealth);
-        
-        return healthBar;
-    }
-
-    updateHealthBar(healthBar, x, y, width, height, health, maxHealth) {
-        healthBar.clear();
-        healthBar.fillStyle(0x00ff00, 1);
-        healthBar.fillRect(x - width/2, y - height/2, width * (health / maxHealth), height);
     }
 }
