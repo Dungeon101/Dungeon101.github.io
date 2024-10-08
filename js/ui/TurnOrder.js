@@ -1,5 +1,5 @@
 class TurnOrder {
-    constructor(scene, combatants) {
+    constructor(scene, combatants, y) {
         this.scene = scene;
         this.combatants = combatants;
         this.imageSize = 50;
@@ -40,9 +40,9 @@ class TurnOrder {
         this.updateHighlight();
     }
 
-    updateHighlight() {
+    updateHighlight(currentTurnIndex) {
         this.turnSprites.forEach((turn, index) => {
-            turn.highlight.setVisible(index === this.currentTurnIndex);
+            turn.highlight.setVisible(index === currentTurnIndex);
         });
     }
 

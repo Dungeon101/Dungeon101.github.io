@@ -10,9 +10,6 @@ class CombatActions {
             return;
         }
 
-        // Remove the action text
-        // actionText is no longer needed
-
         if (character.nameText) {
             character.nameText.setStyle({ fill: '#00ff00' });
         }
@@ -22,7 +19,6 @@ class CombatActions {
                 target.sprite.removeAllListeners('pointerdown');
                 target.sprite.setInteractive();
                 target.sprite.on('pointerdown', () => {
-                    // Remove the actionText.destroy() call as it no longer exists
                     this.attack(character, target);
                     targets.forEach(t => {
                         if (t.sprite) t.sprite.disableInteractive();
@@ -31,8 +27,6 @@ class CombatActions {
                         character.nameText.setStyle({ fill: '#ffffff' });
                     }
                     this.scene.time.delayedCall(1000, () => {
-                        this.scene.currentTurn = (this.scene.currentTurn + 1) % this.scene.combatants.length;
-                        this.scene.turnOrder.nextTurn();
                         this.scene.nextTurn();
                     });
                 });
@@ -55,18 +49,26 @@ class CombatActions {
             enemy.nameText.setStyle({ fill: '#ffffff' });
             
             this.scene.time.delayedCall(1000, () => {
-                this.scene.currentTurn = (this.scene.currentTurn + 1) % this.scene.combatants.length;
-                this.scene.turnOrder.nextTurn();
                 this.scene.nextTurn();
             });
         });
     }
 
-    attack(attacker, target) {
-        let damage = attacker.attack;
+    attack(attacker, target, damageOverride = null) {
+        let damage = damageOverride !== null ? damageOverride : attacker.attack;
+        if (target.defense) {
+            damage = Math.max(1, damage - target.defense);
+        }
         target.health = Math.max(0, target.health - damage);
 
-        target.healthBar.setHealth(target.health, target.maxHealth);
+        if (target.health > 0) {
+            target.healthBar.setHealth(target.health, target.maxHealth);
+            target.hpText.setText(`HP: ${target.health}/${target.maxHealth}`);
+        } else {
+            target.healthBar.setHealth(0, target.maxHealth);
+            target.hpText.setText(`HP: 0/${target.maxHealth}`);
+            this.handleDeath(target);
+        }
 
         let effect = this.scene.add.image(target.sprite.x, target.sprite.y, 'attack-effect');
         effect.setScale(0.5);
@@ -91,6 +93,12 @@ class CombatActions {
         }
 
         this.scene.combatUI.updateCombatantInfo();
+    }
+
+    handleDeath(target) {
+        target.sprite.setAlpha(0.5);
+        target.healthBar.bar.destroy();
+        // Any other death-related logic
     }
 
     checkCombatEnd() {

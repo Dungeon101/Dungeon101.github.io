@@ -10,7 +10,8 @@ class CombatSetup {
             isEnemy: false,
             sprite: null,
             healthBar: null,
-            nameText: null
+            nameText: null,
+            defense: 5 // Add a default defense value
         }));
     }
 
