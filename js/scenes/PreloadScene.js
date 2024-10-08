@@ -7,7 +7,7 @@ class PreloadScene extends Phaser.Scene {
         // Create loading bar
         let loadingBar = this.add.graphics({
             fillStyle: {
-                color: 0xffffff // white
+                color: 0xffffff
             }
         });
 

@@ -6,7 +6,6 @@ class BootScene extends Phaser.Scene {
     preload() {
         // Load any assets needed for the loading screen
         this.load.image('loading-background', 'assets/images/ui/loading-background.png');
-        // Add more assets as needed
     }
 
     create() {

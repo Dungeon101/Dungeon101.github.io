@@ -3,7 +3,7 @@ const config = {
     width: 800,
     height: 600,
     parent: 'game-container',
-    scene: [], // We'll add scenes dynamically
+    scene: [],
     physics: {
         default: 'arcade',
         arcade: {

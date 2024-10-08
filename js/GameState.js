@@ -26,7 +26,6 @@ class GameState {
         this.bossDefeated = false;
     }
 
-    // New method to check if current floor is a boss floor
     isBossFloor() {
         return this.currentFloor % 5 === 0;
     }
