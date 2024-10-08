@@ -10,8 +10,8 @@ class CombatActions {
             return;
         }
 
-        let actionText = this.scene.add.text(400, 100, `${character.name}'s turn. Click an enemy to attack.`, 
-            { font: '18px Arial', fill: '#ffffff' }).setOrigin(0.5);
+        // Remove the action text
+        // actionText is no longer needed
 
         if (character.nameText) {
             character.nameText.setStyle({ fill: '#00ff00' });
@@ -22,7 +22,7 @@ class CombatActions {
                 target.sprite.removeAllListeners('pointerdown');
                 target.sprite.setInteractive();
                 target.sprite.on('pointerdown', () => {
-                    actionText.destroy();
+                    // Remove the actionText.destroy() call as it no longer exists
                     this.attack(character, target);
                     targets.forEach(t => {
                         if (t.sprite) t.sprite.disableInteractive();
@@ -32,6 +32,7 @@ class CombatActions {
                     }
                     this.scene.time.delayedCall(1000, () => {
                         this.scene.currentTurn = (this.scene.currentTurn + 1) % this.scene.combatants.length;
+                        this.scene.turnOrder.nextTurn();
                         this.scene.nextTurn();
                     });
                 });
@@ -55,6 +56,7 @@ class CombatActions {
             
             this.scene.time.delayedCall(1000, () => {
                 this.scene.currentTurn = (this.scene.currentTurn + 1) % this.scene.combatants.length;
+                this.scene.turnOrder.nextTurn();
                 this.scene.nextTurn();
             });
         });

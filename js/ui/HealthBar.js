@@ -4,7 +4,7 @@ class HealthBar {
 
         this.x = x;
         this.y = y;
-        this.width = width;
+        this.width = width * 0.5; // Reduce width to 80%
         this.height = height;
 
         this.draw();
@@ -26,7 +26,7 @@ class HealthBar {
 
         // Health
         this.bar.fillStyle(0x00ff00);
-        let d = Math.floor((this.health / this.maxHealth) * this.width);
-        this.bar.fillRect(this.x - this.width / 2 + 2, this.y - this.height / 2 + 2, d - 4, this.height - 4);
+        let d = Math.floor((this.health / this.maxHealth) * (this.width - 4));
+        this.bar.fillRect(this.x - this.width / 2 + 2, this.y - this.height / 2 + 2, d, this.height - 4);
     }
 }

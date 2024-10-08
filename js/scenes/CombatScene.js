@@ -16,6 +16,7 @@ class CombatScene extends Phaser.Scene {
 
     preload() {
         this.combatSetup.preloadAssets();
+        this.load.image('highlight', 'assets/images/ui/highlight.png');
     }
 
     create() {
@@ -24,6 +25,11 @@ class CombatScene extends Phaser.Scene {
         this.enemies = this.enemyGenerator.generateEnemies(this.isBossFight);
         this.combatSetup.setupEnemies(this.enemies);
         this.combatUI.updateCombatantInfo();
+
+        // Create the turn order UI
+        // We're no longer passing any y-coordinate
+        this.turnOrder = new TurnOrder(this, this.combatants);
+
         this.time.delayedCall(1000, () => this.nextTurn());
     }
 
@@ -33,6 +39,7 @@ class CombatScene extends Phaser.Scene {
         let combatant = this.combatants[this.currentTurn];
         if (combatant.health <= 0) {
             this.currentTurn = (this.currentTurn + 1) % this.combatants.length;
+            this.turnOrder.nextTurn();
             this.nextTurn();
             return;
         }
