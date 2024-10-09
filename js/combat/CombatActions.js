@@ -14,60 +14,95 @@ class CombatActions {
             character.nameText.setStyle({ fill: '#00ff00' });
         }
 
+        this.enableTargetSelection(character, targets);
+    }
+
+    enableTargetSelection(character, targets) {
         targets.forEach(target => {
             if (target.sprite) {
                 target.sprite.removeAllListeners('pointerdown');
                 target.sprite.setInteractive();
                 target.sprite.on('pointerdown', () => {
                     this.attack(character, target);
-                    targets.forEach(t => {
-                        if (t.sprite) t.sprite.disableInteractive();
-                    });
+                    this.disableTargetSelection(targets);
                     if (character.nameText) {
                         character.nameText.setStyle({ fill: '#ffffff' });
                     }
                     this.scene.time.delayedCall(1000, () => {
-                        this.scene.nextTurn();
+                        this.endTurn();
                     });
                 });
             }
         });
     }
 
+    disableTargetSelection(targets) {
+        targets.forEach(target => {
+            if (target.sprite) {
+                target.sprite.disableInteractive();
+                target.sprite.removeAllListeners('pointerdown');
+            }
+        });
+    }
+
     enemyAction(enemy) {
+        if (enemy.health <= 0) {
+            this.endTurn();
+            return;
+        }
+
         let targets = this.scene.combatants.filter(c => !c.isEnemy && c.health > 0);
         if (targets.length === 0) {
             this.scene.endCombat(false);
             return;
         }
 
-        enemy.nameText.setStyle({ fill: '#ff0000' });
+        if (enemy.nameText) {
+            enemy.nameText.setStyle({ fill: '#ff0000' });
+        }
         let target = Phaser.Math.RND.pick(targets);
         
         this.scene.time.delayedCall(1000, () => {
             this.attack(enemy, target);
-            enemy.nameText.setStyle({ fill: '#ffffff' });
+            if (enemy.nameText) {
+                enemy.nameText.setStyle({ fill: '#ffffff' });
+            }
             
             this.scene.time.delayedCall(1000, () => {
-                this.scene.nextTurn();
+                this.endTurn();
             });
         });
     }
 
-    attack(attacker, target, damageOverride = null) {
-        let damage = damageOverride !== null ? damageOverride : attacker.attack;
-        if (target.defense) {
-            damage = Math.max(1, damage - target.defense);
+    attack(attacker, target) {
+        console.log(`${attacker.name} is attacking ${target.name}`);
+        let damage = attacker.stats.calculateAttack();
+        
+        // Apply Berserk bonus if active
+        if (attacker.berserkBonus) {
+            damage = Math.floor(damage * attacker.berserkBonus);
         }
+
+        if (target.stats.calculateDodgeChance() > Math.random() * 100) {
+            this.scene.add.text(target.sprite.x, target.sprite.y - 20, 'Dodged!', 
+                { font: '16px Arial', fill: '#ffffff' })
+                .setOrigin(0.5)
+                .destroy({ delay: 1000 });
+            return;
+        }
+
+        this.applyDamage(target, damage);
+    }
+
+    applyDamage(target, damage) {
+        damage = Math.max(1, damage - target.stats.calculateDefense());
         target.health = Math.max(0, target.health - damage);
 
-        if (target.health > 0) {
+        if (target.healthBar) {
             target.healthBar.setHealth(target.health, target.maxHealth);
+        }
+        if (target.hpText) {
             target.hpText.setText(`HP: ${target.health}/${target.maxHealth}`);
-        } else {
-            target.healthBar.setHealth(0, target.maxHealth);
-            target.hpText.setText(`HP: 0/${target.maxHealth}`);
-            this.handleDeath(target);
         }
 
         let effect = this.scene.add.image(target.sprite.x, target.sprite.y, 'attack-effect');
@@ -88,8 +123,7 @@ class CombatActions {
             .destroy({ delay: 1000 });
 
         if (target.health <= 0) {
-            target.sprite.setAlpha(0.5);
-            target.healthBar.bar.destroy(); 
+            this.handleDeath(target);
         }
 
         this.scene.combatUI.updateCombatantInfo();
@@ -113,5 +147,9 @@ class CombatActions {
             return true;
         }
         return false;
+    }
+
+    endTurn() {
+        this.scene.nextTurn();
     }
 }

@@ -6,69 +6,92 @@ class CharacterAbilities {
 
     getAbilityInfo(characterName) {
         const abilities = {
-            warrior: { name: 'Shield Block', description: 'Double defense for 1 turn', cooldown: 3 },
-            mage: { name: 'Fireball', description: 'Deal 15 damage to all enemies', cooldown: 2 },
-            rogue: { name: 'Backstab', description: 'Deal 30 damage to one enemy', cooldown: 2 },
-            healer: { name: 'Group Heal', description: 'Heal all allies for 20 HP', cooldown: 3 }
+            warrior: { name: 'Berserk', cooldown: 3, description: 'Increase ATK for 2 turns' },
+            mage: { name: 'Fireball', cooldown: 2, description: 'Deal AoE damage to all enemies' },
+            rogue: { name: 'Backstab', cooldown: 2, description: 'Deal high damage to one enemy' },
+            healer: { name: 'Heal', cooldown: 3, description: 'Heal all allies' }
         };
-        return abilities[characterName.toLowerCase()];
+        return abilities[characterName] || { name: 'Unknown', cooldown: 0, description: 'No ability' };
     }
 
     useAbility(character, targets) {
         const abilityName = character.name.toLowerCase();
         if (this.abilityCooldowns[abilityName] > 0) {
-            return `${character.name}'s ability is on cooldown for ${this.abilityCooldowns[abilityName]} more turns.`;
+            return `${character.name}'s ability is on cooldown for ${this.abilityCooldowns[abilityName]} more rounds.`;
         }
 
-        const result = this[abilityName + 'Ability'](character, targets);
+        let message = '';
+        switch (abilityName) {
+            case 'warrior':
+                message = this.warriorAbility(character);
+                break;
+            case 'mage':
+                message = this.mageAbility(character, targets.filter(t => t.isEnemy && t.health > 0));
+                break;
+            case 'rogue':
+                message = this.rogueAbility(character, targets.filter(t => t.isEnemy && t.health > 0));
+                break;
+            case 'healer':
+                message = this.healerAbility(character, targets.filter(t => !t.isEnemy));
+                break;
+        }
+
         this.abilityCooldowns[abilityName] = this.getAbilityInfo(abilityName).cooldown;
-        return result;
-    }
-
-    updateCooldowns() {
-        for (let abilityName in this.abilityCooldowns) {
-            if (this.abilityCooldowns[abilityName] > 0) {
-                this.abilityCooldowns[abilityName]--;
-            }
-        }
+        return message;
     }
 
     warriorAbility(character) {
-        character.defense = character.defense * 2;
-        this.scene.time.delayedCall(2000, () => {
-            character.defense = character.defense / 2;
-        });
-        return `${character.name} used Shield Block! Defense doubled for this turn.`;
+        character.berserkTurns = 2;
+        character.berserkBonus = 1.5; // 50% attack increase
+        return `${character.name} goes berserk, increasing their attack by 50% for 2 turns!`;
     }
 
-    mageAbility(character, targets) {
-        const damage = 15;
-        targets.forEach(target => {
-            if (target.isEnemy && target.health > 0) {
-                this.scene.combatActions.attack(character, target, damage);
-            }
+    mageAbility(character, enemies) {
+        const damage = Math.floor(character.stats.atk * 0.8);
+        enemies.forEach(enemy => {
+            this.scene.combatActions.applyDamage(enemy, damage);
         });
-        return `${character.name} cast Fireball! All enemies take ${damage} damage.`;
+        return `${character.name} casts Fireball, dealing ${damage} damage to all enemies!`;
     }
 
-    rogueAbility(character, targets) {
-        const damage = 30;
-        const target = targets.find(t => t.isEnemy && t.health > 0);
-        if (target) {
-            this.scene.combatActions.attack(character, target, damage);
-            return `${character.name} used Backstab on ${target.name}! It deals ${damage} damage.`;
+    rogueAbility(character, enemies) {
+        if (enemies.length === 0) {
+            return `${character.name} attempts to backstab, but there are no enemies left!`;
         }
-        return `${character.name} couldn't find a target for Backstab!`;
+        const target = enemies[0]; // Target the first living enemy
+        const damage = Math.floor(character.stats.atk * 2); // Double damage for backstab
+        this.scene.combatActions.applyDamage(target, damage);
+        return `${character.name} backstabs ${target.name}, dealing ${damage} damage!`;
     }
 
-    healerAbility(character, targets) {
-        const healAmount = 20;
-        targets.forEach(target => {
-            if (!target.isEnemy) {
-                target.health = Math.min(target.health + healAmount, target.maxHealth);
-                target.healthBar.setHealth(target.health, target.maxHealth);
+    healerAbility(character, allies) {
+        const healAmount = Math.floor(character.stats.atk * 1.5);
+        allies.forEach(ally => {
+            ally.health = Math.min(ally.health + healAmount, ally.maxHealth);
+            if (ally.healthBar) {
+                ally.healthBar.setHealth(ally.health, ally.maxHealth);
+            }
+            if (ally.hpText) {
+                ally.hpText.setText(`HP: ${ally.health}/${ally.maxHealth}`);
             }
         });
-        return `${character.name} used Group Heal! All allies recover ${healAmount} HP.`;
+        return `${character.name} casts Group Heal, restoring ${healAmount} HP to all allies!`;
+    }
+
+    updateCooldowns() {
+        for (let char in this.abilityCooldowns) {
+            if (this.abilityCooldowns[char] > 0) {
+                this.abilityCooldowns[char]--;
+            }
+        }
+
+        this.scene.combatants.forEach(combatant => {
+            if (combatant.berserkTurns > 0) {
+                combatant.berserkTurns--;
+                if (combatant.berserkTurns === 0) {
+                    combatant.berserkBonus = 1; // Reset berserk bonus
+                }
+            }
+        });
     }
 }

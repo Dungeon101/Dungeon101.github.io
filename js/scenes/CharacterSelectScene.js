@@ -21,10 +21,10 @@ class CharacterSelectScene extends Phaser.Scene {
         }).setOrigin(0.5);
 
         const characters = [
-            { name: 'Warrior', health: 100, attack: 20, special: 'Shield Block' },
-            { name: 'Mage', health: 70, attack: 30, special: 'Fireball' },
-            { name: 'Rogue', health: 80, attack: 25, special: 'Backstab' },
-            { name: 'Healer', health: 90, attack: 15, special: 'Heal' }
+            { name: 'Warrior', stats: this.generateStartingStats(), special: 'Shield Block' },
+            { name: 'Mage', stats: this.generateStartingStats(), special: 'Fireball' },
+            { name: 'Rogue', stats: this.generateStartingStats(), special: 'Backstab' },
+            { name: 'Healer', stats: this.generateStartingStats(), special: 'Heal' }
         ];
 
         characters.forEach((char, index) => {
@@ -38,7 +38,10 @@ class CharacterSelectScene extends Phaser.Scene {
                 fill: '#ffffff'
             }).setOrigin(0.5).setInteractive();
 
-            const charInfo = this.add.text(x, y + 80, `HP: ${char.health} ATK: ${char.attack}\nSpecial: ${char.special}`, {
+            const charInfo = this.add.text(x, y + 80, 
+                `ATK: ${char.stats.atk} DEF: ${char.stats.def}\n` +
+                `AGL: ${char.stats.agl} HP: ${char.stats.hp}\n` +
+                `Special: ${char.special}`, {
                 font: '16px Arial',
                 fill: '#cccccc',
                 align: 'center'
@@ -58,6 +61,20 @@ class CharacterSelectScene extends Phaser.Scene {
             font: '20px Arial',
             fill: '#ffffff'
         }).setOrigin(0.5);
+    }
+
+    generateStartingStats() {
+        let remainingPoints = 6; // 10 total points, but 4 are used for the base 1 in each stat
+        let stats = { atk: 1, def: 1, agl: 1, hp: 1 };
+        const statKeys = ['atk', 'def', 'agl', 'hp'];
+
+        while (remainingPoints > 0) {
+            const randomStat = Phaser.Math.RND.pick(statKeys);
+            stats[randomStat]++;
+            remainingPoints--;
+        }
+
+        return new CharacterStats(stats.atk, stats.def, stats.agl, stats.hp);
     }
 
     selectCharacter(character, sprite) {

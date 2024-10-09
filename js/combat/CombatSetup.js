@@ -6,12 +6,14 @@ class CombatSetup {
     initializeCombatants() {
         return gameState.party.map(char => ({
             ...char,
-            health: char.currentHealth,
+            health: char.stats.calculateMaxHP(),
+            maxHealth: char.stats.calculateMaxHP(),
+            attack: char.stats.calculateAttack(),
+            defense: char.stats.calculateDefense(),
             isEnemy: false,
             sprite: null,
             healthBar: null,
-            nameText: null,
-            defense: 5 // Add a default defense value
+            nameText: null
         }));
     }
 
@@ -89,5 +91,52 @@ class CombatSetup {
                 isEnemy: true 
             });
         });
+    }
+
+    setupCombatScene() {
+        console.log('Setting up combat scene');
+        
+        this.createBackground();
+
+        const characters = this.scene.combatants.filter(c => !c.isEnemy);
+        const enemies = this.scene.combatants.filter(c => c.isEnemy);
+
+        const centerY = 300;  // Set the center Y position for all combatants
+
+        // Setup characters (from left)
+        characters.forEach((char, index) => {
+            const x = 80 + (index * 80);
+            this.setupCombatant(char, x, centerY);
+        });
+
+        // Setup enemies (from right)
+        enemies.forEach((enemy, index) => {
+            const x = this.scene.sys.game.config.width - (80 + (index * 80));
+            this.setupCombatant(enemy, x, centerY);
+        });
+    }
+
+    setupCombatant(combatant, x, y) {
+        console.log(`Setting up ${combatant.name} at (${x}, ${y})`);
+
+        // Create sprite
+        const spriteName = combatant.isEnemy ? combatant.type : combatant.name.toLowerCase();
+        combatant.sprite = this.scene.add.sprite(x, y, spriteName).setScale(0.5);
+
+        // Create health bar
+        combatant.healthBar = new HealthBar(this.scene, x, y + 40, 60, 8);
+        combatant.healthBar.setHealth(combatant.health, combatant.maxHealth);
+
+        // Add name text
+        combatant.nameText = this.scene.add.text(x, y - 40, combatant.name, { 
+            font: '14px Arial', 
+            fill: '#ffffff' 
+        }).setOrigin(0.5);
+
+        // Add HP text
+        combatant.hpText = this.scene.add.text(x, y + 60, `HP: ${combatant.health}/${combatant.maxHealth}`, { 
+            font: '12px Arial', 
+            fill: '#ffffff' 
+        }).setOrigin(0.5);
     }
 }
