@@ -1,97 +1,115 @@
 # Dungeon101
 
-Dungeon101 is an engaging web-based dungeon crawler game built with Phaser 3. Embark on a thrilling adventure as you explore procedurally generated dungeons, battle fierce enemies, and face challenging bosses while progressing through increasingly difficult floors.
+Dungeon101 is a browser-based **2D fantasy RPG** with **turn-based combat**, **procedural generation**, and **roguelite meta-progression**.  
+Each run is unique. Death is permanent. Progress is eternal.
 
-## Features
+---
 
-- Procedurally generated dungeons for unique experiences each playthrough
-- Turn-based combat system with strategic depth
-- Four distinct character classes: Warrior, Mage, Rogue, and Healer
-- Special abilities for each character class
-- Progressive difficulty with increasingly challenging enemies and boss fights
-- Persistent game state with character progression
+## Overview
 
-## How to Play
+Dungeon101 focuses on classic RPG mechanics inspired by D&D-style systems and old-school fantasy games.  
+Players explore a procedurally generated overworld, enter dangerous dungeons, and face powerful bosses.
 
-1. **Character Selection**: Choose your party of four characters from the available classes. Each class has unique strengths and abilities.
+When a character dies, the run ends — but permanent bonuses, unlocked talents, and special relics persist, making future runs stronger and more strategic.
 
-2. **Dungeon Exploration**: Navigate through the dungeon using arrow keys. Explore rooms and corridors while avoiding or engaging enemies.
+---
 
-3. **Combat**: 
-   - Battles are turn-based. Characters and enemies take turns based on their agility stat.
-   - Select a target by clicking on an enemy sprite.
-   - Use character abilities by clicking on the ability icons below each character.
-   - Plan your strategy carefully, using your party's strengths to overcome challenges.
+## Core Features
 
-4. **Progression**: 
-   - Defeat enemies to progress through the dungeon.
-   - Every 5th floor features a challenging boss fight.
-   - Characters gain improved stats as you progress through floors.
+- **2D Top-Down RPG**
+- **Turn-Based Combat**
+- **Procedural Overworlds and Dungeons**
+- **Permadeath with Meta-Progression**
+- **Class-Based Gameplay**
+  - Warrior
+  - Mage
+  - Rogue
+- **Visual Talent Trees per Class**
+- **Unique Boss Mechanics**
+- **Partial Loot Inheritance Between Runs**
+- **Google Authentication**
+- **Persistent Saves (localStorage-based)**
 
-5. **Game Over**: The game ends if all party members are defeated. Try again with a new strategy!
+---
 
-## Getting Started
+## Gameplay Loop
 
-To run the game locally:
+1. Log in with Google
+2. Create a character and choose a class
+3. Explore the overworld
+4. Enter procedurally generated dungeons
+5. Fight enemies using turn-based combat
+6. Collect loot and unlock talents
+7. Defeat bosses
+8. Die, inherit legacy bonuses, and start again stronger
 
-1. Clone this repository:
-   ```
-   git clone https://github.com/yourusername/dungeon101.git
-   ```
-2. Navigate to the project directory:
-   ```
-   cd dungeon101
-   ```
-3. Open `index.html` in a modern web browser.
+---
 
-For development:
+## Tech Stack
 
-1. Set up a local web server (e.g., using Python's `http.server` or Node.js' `http-server`).
-2. Run the local server in the project root directory.
-3. Open the provided local URL in your browser.
+- **HTML5**
+- **CSS3**
+- **JavaScript (ES6+)**
+- **HTML5 Canvas**
+- No frameworks or external libraries
 
-## Project Structure
+---
 
-dungeon101/
-├── assets/
-│ └── images/
-│ ├── characters/
-│ ├── dungeon/
-│ ├── effects/
-│ ├── enemies/
-│ └── ui/
-├── css/
-│ └── style.css
-├── js/
-│ ├── combat/
-│ ├── dungeon/
-│ ├── scenes/
-│ ├── ui/
-│ ├── config.js
-│ ├── game.js
-│ └── GameState.js
-├── index.html
-├── LICENSE
-└── README.md
+## Graphics
 
+Dungeon101 uses the **Tiny Swords** asset pack by PixelFrog for all tiles, characters, and environments.
 
-## Contributing
+---
 
-Contributions to Dungeon101 are welcome! If you'd like to contribute:
+## Project Structure (Example)
+/src
+/core
+gameLoop.js
+turnSystem.js
+/player
+player.js
+classes.js
+talentTrees.js
+/systems
+combatSystem.js
+bossSystem.js
+lootSystem.js
+metaProgression.js
+proceduralGeneration.js
+saveSystem.js
+/ui
+hud.js
+menus.js
+/auth
+googleAuth.js
+/data
+balanceConstants.js
+index.html
+style.css
+main.js
 
-1. Fork the repository.
-2. Create a new branch for your feature or bug fix.
-3. Make your changes and commit them with clear, descriptive messages.
-4. Push your changes to your fork.
-5. Create a pull request, describing the changes you've made.
+---
+
+## Permadeath & Meta-Progression
+
+- Characters are permanently lost on death
+- Each new run starts at level 1
+- Permanent bonuses unlock between runs:
+  - Extra starting stat points
+  - New base talents
+  - Increased rare loot chances
+- Special relics can carry over between runs
+
+---
+
+## Running the Game
+
+Simply open `index.html` in a modern browser.
+
+No build step required.
+
+---
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- [Phaser 3](https://phaser.io/) - The game framework used
-- [OpenGameArt](https://opengameart.org/) - For some of the game assets
-
-Enjoy your adventure in Dungeon101!
+This project is for educational and experimental purposes.
