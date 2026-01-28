@@ -1,0 +1,452 @@
+:root {
+    --bg-color: #1a1c2c;
+    --primary: #99e550;
+    --secondary: #dcdacf;
+    --accent: #ac3232;
+    --ui-bg: rgba(20, 24, 46, 0.95);
+    --border-color: #5b6ee1;
+    --font-heading: 'Press Start 2P', cursive;
+    --font-body: 'Roboto', sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+    user-select: none;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    background-color: #0d0f1b;
+    color: var(--secondary);
+    font-family: var(--font-body);
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+}
+
+h1,
+h2,
+h3 {
+    font-family: var(--font-heading);
+    margin-bottom: 2rem;
+    text-transform: uppercase;
+    text-shadow: 4px 4px 0px #000;
+}
+
+.game-title {
+    font-size: 3rem;
+    color: var(--primary);
+}
+
+.highlight {
+    color: var(--accent);
+}
+
+#app {
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+.screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: var(--bg-color);
+    transition: opacity 0.3s;
+    z-index: 10;
+}
+
+.screen.hidden {
+    opacity: 0;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.screen.active {
+    opacity: 1;
+    pointer-events: all;
+}
+
+/* Menu */
+.menu-container {
+    text-align: center;
+}
+
+.btn {
+    display: block;
+    margin: 1rem auto;
+    padding: 1rem 2rem;
+    font-family: var(--font-heading);
+    font-size: 1rem;
+    background: #4b692f;
+    border: 4px solid #37946e;
+    color: #fff;
+    cursor: pointer;
+    box-shadow: 0 6px 0 #243e26;
+    transition: transform 0.1s;
+}
+
+.btn:active {
+    transform: translateY(4px);
+    box-shadow: 0 2px 0 #243e26;
+}
+
+.btn:disabled {
+    background: #595652;
+    border-color: #3f3f3f;
+    box-shadow: none;
+    cursor: not-allowed;
+}
+
+.btn.primary {
+    background: #2f694b;
+}
+
+.btn.secondary {
+    background: #692f2f;
+    border-color: #943737;
+    box-shadow: 0 6px 0 #3e2424;
+}
+
+/* Character Select */
+.class-cards {
+    display: flex;
+    gap: 2rem;
+    margin-bottom: 2rem;
+}
+
+.class-card {
+    background: var(--ui-bg);
+    border: 2px solid var(--border-color);
+    padding: 2rem;
+    cursor: pointer;
+    text-align: center;
+    width: 200px;
+    transition: border-color 0.2s;
+}
+
+.class-card:hover,
+.class-card.selected {
+    border-color: var(--primary);
+    background: #2a2f4e;
+}
+
+/* Game & Canvas */
+#game-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    image-rendering: pixelated;
+}
+
+/* HUD */
+#hud-top {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    pointer-events: none;
+    text-shadow: 2px 2px 0 #000;
+}
+
+#player-profile {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+#player-name {
+    font-family: var(--font-heading);
+    font-size: 1rem;
+    color: #ffd700;
+    margin-bottom: 0.2rem;
+}
+
+#enemy-hud {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.5rem;
+}
+
+#enemy-name {
+    font-family: var(--font-heading);
+    color: #ac3232;
+    font-size: 1rem;
+}
+
+#controls-hint {
+    position: absolute;
+    bottom: 2rem;
+    right: 2rem;
+    color: var(--secondary);
+    font-family: var(--font-heading);
+    font-size: 0.8rem;
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+.bar-container {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.bar {
+    width: 250px;
+    height: 30px;
+    background: #222;
+    border: 3px solid #14182e;
+    position: relative;
+    font-family: var(--font-heading);
+    font-size: 0.8rem;
+    color: #fff;
+    box-shadow: 0 4px 0 #000;
+}
+
+.bar-fill {
+    height: 100%;
+    transition: width 0.3s ease-out;
+}
+
+.bar.hp .bar-fill {
+    background: #ac3232;
+}
+
+.bar.mana .bar-fill {
+    background: #5b6ee1;
+}
+
+.bar.xp .bar-fill {
+    background: #9c27b0;
+}
+
+.bar.enemy-hp .bar-fill {
+    background: #d32f2f;
+}
+
+.bar-text {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2;
+    text-shadow: 1px 1px 0 #000;
+}
+
+/* Combat Overlay Message */
+#combat-overlay {
+    position: absolute;
+    top: 20%;
+    left: 0;
+    width: 100%;
+    text-align: center;
+    pointer-events: none;
+    z-index: 50;
+    animation: flash 2s forwards;
+}
+
+#combat-message {
+    font-size: 4rem;
+    color: #ac3232;
+    text-shadow: 4px 4px 0 #000;
+    -webkit-text-stroke: 2px #fff;
+}
+
+@keyframes flash {
+    0% {
+        opacity: 0;
+        transform: scale(0.5);
+    }
+
+    20% {
+        opacity: 1;
+        transform: scale(1.2);
+    }
+
+    80% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    100% {
+        opacity: 0;
+        display: none;
+    }
+}
+
+#hud-bottom {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    padding-bottom: 2rem;
+    text-align: center;
+    pointer-events: none;
+    display: flex;
+    justify-content: center;
+}
+
+/* Modern Action Buttons */
+#action-bar {
+    display: inline-flex;
+    gap: 1.5rem;
+    pointer-events: auto;
+    background: transparent;
+    padding: 1rem;
+}
+
+.action-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100px;
+    height: 100px;
+    background: #2a2f4e;
+    border: 3px solid #5b6ee1;
+    border-radius: 12px;
+    color: #fff;
+    cursor: pointer;
+    box-shadow: 0 6px 0 #14182e;
+    transition: transform 0.1s, border-color 0.2s;
+}
+
+.action-btn:active {
+    transform: translateY(6px);
+    box-shadow: 0 0 0 #14182e;
+}
+
+.action-btn:hover {
+    border-color: #99e550;
+    background: #3c4266;
+}
+
+.btn-key {
+    font-family: var(--font-heading);
+    font-size: 1.5rem;
+    color: #fbf236;
+    margin-bottom: 0.5rem;
+}
+
+.btn-label {
+    font-family: var(--font-body);
+    font-weight: bold;
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+/* Specific Button Colors */
+.action-btn[data-key="1"] {
+    border-color: #ac3232;
+}
+
+/* Attack - Red */
+.action-btn[data-key="1"] .btn-key {
+    color: #ac3232;
+}
+
+.action-btn[data-key="2"] {
+    border-color: #5b6ee1;
+}
+
+/* Skill - Blue */
+.action-btn[data-key="2"] .btn-key {
+    color: #5b6ee1;
+}
+
+.action-btn[data-key="3"] {
+    border-color: #99e550;
+}
+
+/* Item - Green */
+.action-btn[data-key="3"] .btn-key {
+    color: #99e550;
+}
+
+.action-btn[data-key="Space"] {
+    border-color: #dcdacf;
+}
+
+.action-btn[data-key="Space"] .btn-key {
+    color: #dcdacf;
+    font-size: 1rem;
+}
+
+.action-btn:hover {
+    transform: translateY(-5px);
+    background: #464f77;
+    box-shadow: 0 10px 0 #14182e;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Overlays */
+.overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 20;
+}
+
+.overlay.hidden {
+    display: none;
+}
+
+.overlay-content {
+    background: var(--ui-bg);
+    border: 4px solid var(--border-color);
+    padding: 2rem;
+    position: relative;
+    max-width: 800px;
+    width: 90%;
+}
+
+#talent-canvas {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+}
+
+.btn-close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: transparent;
+    border: none;
+    color: var(--accent);
+    font-family: var(--font-heading);
+    font-size: 1.5rem;
+    cursor: pointer;
+}
+
+/* Enemy HP Bar - Smaller and more compact */
+#enemy-hud .bar {
+    width: 200px;
+    height: 25px;
+}

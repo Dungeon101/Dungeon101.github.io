@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dungeon101 - Roguelite RPG</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Roboto:wght@400;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+
+    <div id="app">
+        <!-- Main Menu / Login -->
+        <div id="screen-main-menu" class="screen active">
+            <h1 class="game-title">Dungeon<span class="highlight">101</span></h1>
+            <div class="menu-container">
+                <p id="auth-status">Not logged in</p>
+                <button id="btn-login" class="btn primary">Login with Google (Mock)</button>
+                <button id="btn-start" class="btn secondary" disabled>Start Game</button>
+            </div>
+        </div>
+
+        <!-- Character Selection -->
+        <div id="screen-character-select" class="screen hidden">
+            <h2>Choose Your Class</h2>
+            <div class="class-cards">
+                <div class="class-card" data-class="warrior">
+                    <h3>Warrior</h3>
+                    <p>Tank & Melee</p>
+                    <div class="class-icon warrior-icon"></div>
+                </div>
+                <div class="class-card" data-class="mage">
+                    <h3>Mage</h3>
+                    <p>Burst & Control</p>
+                    <div class="class-icon mage-icon"></div>
+                </div>
+                <div class="class-card" data-class="rogue">
+                    <h3>Rogue</h3>
+                    <p>Crit & Evasion</p>
+                    <div class="class-icon rogue-icon"></div>
+                </div>
+            </div>
+            <button id="btn-launch-run" class="btn primary" disabled>Begin Run</button>
+            <button id="btn-back-menu" class="btn">Back</button>
+        </div>
+
+        <!-- Game Interface -->
+        <div id="screen-game" class="screen hidden">
+            <canvas id="game-canvas"></canvas>
+
+            <div id="hud-top">
+                <div id="player-profile">
+                    <div id="player-name">Hero Lv.1</div>
+                    <div class="bar-container">
+                        <div id="hp-bar" class="bar hp">
+                            <div class="bar-fill" style="width: 100%;"></div>
+                            <span class="bar-text">HP: 100/100</span>
+                        </div>
+                        <div id="mana-bar" class="bar mana">
+                            <div class="bar-fill" style="width: 100%;"></div>
+                            <span class="bar-text">MP: 50/50</span>
+                        </div>
+                        <div id="xp-bar" class="bar xp">
+                            <div class="bar-fill" style="width: 0%;"></div>
+                            <span class="bar-text">XP: 0/100</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="enemy-hud" class="hidden">
+                    <div id="enemy-name">Enemy</div>
+                    <div id="enemy-hp-bar" class="bar enemy-hp">
+                        <div class="bar-fill" style="width: 100%;"></div>
+                        <span class="bar-text">HP: ??/??</span>
+                    </div>
+                </div>
+
+                <div id="turn-indicator" class="hidden">Player's Turn</div>
+            </div>
+
+            <div id="controls-hint">
+                T: Talents | I: Inventory
+            </div>
+
+            <div id="combat-overlay" class="hidden">
+                <h2 id="combat-message">COMBAT START!</h2>
+            </div>
+
+            <div id="hud-bottom">
+                <div id="action-bar" class="hidden">
+                    <button class="action-btn" data-key="1">
+                        <div class="btn-key">1</div>
+                        <div class="btn-label">Attack</div>
+                    </button>
+                    <button class="action-btn" data-key="2">
+                        <div class="btn-key">2</div>
+                        <div class="btn-label" id="btn-skill-label">Skill</div>
+                    </button>
+                    <button class="action-btn" data-key="3">
+                        <div class="btn-key">3</div>
+                        <div class="btn-label">Item</div>
+                    </button>
+                    <button class="action-btn" data-key="Space">
+                        <div class="btn-key">Space</div>
+                        <div class="btn-label">End Turn</div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Talent Tree Overlay -->
+            <div id="overlay-talents" class="overlay hidden">
+                <div class="overlay-content">
+                    <h2>Talent Tree</h2>
+                    <canvas id="talent-canvas"></canvas>
+                    <button id="btn-close-talents" class="btn-close">X</button>
+                </div>
+            </div>
+
+            <!-- Game Over -->
+            <div id="overlay-gameover" class="overlay hidden">
+                <h2>YOU DIED</h2>
+                <p>Run Stats: <span id="run-stats">...</span></p>
+                <button id="btn-return-menu" class="btn">Return to Menu</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script type="module" src="js/main.js"></script>
+</body>
+
+</html>
