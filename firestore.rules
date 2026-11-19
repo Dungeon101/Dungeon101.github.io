@@ -1,0 +1,30 @@
+rules_version = '2';
+// Dungeon101: players/{uid} holds a player's sanctuary progress (only they can read or write it),
+// scores/{id} is the Hall of Fame: anyone can read it, a signed-in player can only add their own runs, never edit them.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /players/{uid} {
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['meta', 'updated'])
+        && request.resource.data.meta is string && request.resource.data.meta.size() < 50000
+        && request.resource.data.updated == request.time;
+    }
+
+    match /scores/{id} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'cls', 'floor', 'score', 'win', 'kills', 'turns', 'at'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 16
+        && request.resource.data.cls in ['warrior', 'mage', 'rogue']
+        && request.resource.data.floor is int && request.resource.data.floor >= 1 && request.resource.data.floor <= 9
+        && request.resource.data.score is int && request.resource.data.score >= 0 && request.resource.data.score <= 60000
+        && request.resource.data.win is bool
+        && request.resource.data.kills is int && request.resource.data.kills >= 0 && request.resource.data.kills <= 1000
+        && request.resource.data.turns is int && request.resource.data.turns >= 0
+        && request.resource.data.at == request.time;
+      allow update, delete: if false;
+    }
+  }
+}
