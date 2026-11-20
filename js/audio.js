@@ -72,6 +72,7 @@ export const sfx = (name) => { try { FX[name]?.(); } catch { /* audio is optiona
 
 // a quiet two-oscillator drone, a different chord per act
 export function ambient(act) {
+  if (!ac && !act) return; // nothing playing yet: don't create the audio context before the first click
   const c = ctx(); if (!c) return;
   if (drone) { drone.g.gain.setTargetAtTime(0, c.currentTime, 0.5); const old = drone; setTimeout(() => old.o.forEach((o) => o.stop()), 2000); drone = null; }
   if (!act) return;

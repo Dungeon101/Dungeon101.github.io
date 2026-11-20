@@ -6,7 +6,7 @@
 
 <p align="center">
   A turn-based roguelite you play in the browser: nine floors, three bosses, one torch.<br>
-  <a href="#english">English</a> · <a href="#italiano">Italiano</a> · <a href="https://dungeon101.github.io">Play</a>
+  <a href="#english">English</a> · <a href="#italiano">Italiano</a> · <a href="https://dungeon101.github.io">Play</a> · <a href="https://davide-mariotti.github.io/apps/dungeon101/">Website</a>
 </p>
 
 <p align="center">
