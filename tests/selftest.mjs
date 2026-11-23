@@ -4,16 +4,28 @@
 import assert from 'node:assert/strict';
 import { generate, distanceMap, walkable, canStep, DIRS, dist } from '../js/dungeon.js';
 import { Game, itemScore } from '../js/game.js';
-import { CLASSES, TALENTS, SKILLS } from '../js/data.js';
+import { CLASSES, TALENTS, SKILLS, FLOORS, ACTS, ENEMIES, RELICS, isBossFloor, actIndex } from '../js/data.js';
 
 // 1. floors: start and stairs reachable, every walkable tile connected
-for (let f = 1; f <= 9; f++) for (let i = 0; i < 40; i++) {
+for (let f = 1; f <= FLOORS; f++) for (let i = 0; i < 40; i++) {
   const m = generate(f);
   const d = distanceMap(m, m.start.x, m.start.y);
   assert.ok(d[m.stairs.y * m.w + m.stairs.x] > 0, `floor ${f}: stairs unreachable`);
   for (let k = 0; k < m.t.length; k++) if (m.t[k] === 1 || m.t[k] === 3) assert.ok(d[k] >= 0, `floor ${f}: isolated tile`);
 }
 console.log('floors ok');
+
+// every act must be playable: a bestiary, a boss that exists, a relic to unlock from it, and a boss floor at its end
+for (const [i, act] of ACTS.entries()) {
+  assert.ok(act.pool.length >= 3, `act ${act.id}: bestiary too small`);
+  for (const k of act.pool) assert.ok(ENEMIES[k], `act ${act.id}: enemy ${k} does not exist`);
+  assert.ok(ENEMIES[act.boss]?.boss, `act ${act.id}: boss ${act.boss} is not a boss`);
+  assert.ok(Object.values(RELICS).some((r) => r.boss === act.boss), `act ${act.id}: no relic from ${act.boss}`);
+  assert.ok(isBossFloor((i + 1) * 3), `act ${act.id}: its last floor is not a boss floor`);
+  assert.equal(actIndex((i + 1) * 3 - 1), i, `act ${act.id}: floors do not line up`);
+}
+assert.equal(actIndex(FLOORS), ACTS.length - 1, 'the last floor belongs to the last act');
+console.log(`${FLOORS} floors in ${ACTS.length} acts ok`);
 
 // 2. local and cloud progress merge: more lifetime embers wins, relics and records add up
 {
@@ -102,6 +114,14 @@ for (const cls of Object.keys(CLASSES)) {
   const avg = floors.reduce((a, b) => a + b, 0) / runs;
   console.log(`${cls.padEnd(8)} avg floor ${avg.toFixed(1)}  wins ${wins}/${runs}  avg level ${(lv / runs).toFixed(1)}  deaths ${JSON.stringify(causes)}`);
 }
-// talents are all reachable
-for (const c of Object.keys(TALENTS)) assert.equal(TALENTS[c].flat().length, 9);
+// talents are all reachable, three branches of the same depth for every class
+const depths = new Set();
+for (const c of Object.keys(TALENTS)) {
+  assert.equal(TALENTS[c].length, 3, `${c}: three branches`);
+  depths.add(TALENTS[c][0].length);
+  for (const b of TALENTS[c]) assert.equal(b.length, TALENTS[c][0].length, `${c}: branches of different depth`);
+  assert.deepEqual(TALENTS[c].map((b) => b.map((n) => n.id[0])), [['A'], ['B'], ['C']].map(([l]) => TALENTS[c].map(() => l)), `${c}: branch letters`);
+  assert.equal(CLASSES[c].talentIcons.length, 3, `${c}: an icon per branch`);
+}
+assert.equal(depths.size, 1, 'every class has the same number of talent tiers');
 console.log('selftest ok');

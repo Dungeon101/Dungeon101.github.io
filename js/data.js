@@ -1,16 +1,26 @@
 // Game tables: classes, skills, talents, enemies, items, floors, sanctuary upgrades, relics.
 // Everything here is plain data; the rules that use it live in game.js.
 
-export const FLOORS = 9;
-
-// one act every three floors, each with its own look, generator and bestiary
+// one act every three floors, each with its own look, generator and bestiary. The last floor of an act is its boss.
 export const ACTS = [
   { id: 'crypt', name: { en: 'The Crypt', it: 'La Cripta' }, gen: 'rooms', pool: ['rat', 'skeleton', 'ghoul', 'cultist'], boss: 'boneKing' },
   { id: 'caves', name: { en: 'The Fungal Caves', it: 'Le Grotte Fungine' }, gen: 'caves', pool: ['bat', 'goblin', 'spider', 'slime'], boss: 'broodmother' },
   { id: 'abyss', name: { en: 'The Abyss', it: 'L\'Abisso' }, gen: 'abyss', pool: ['imp', 'wraith', 'golem', 'cultist'], boss: 'lich' },
 ];
-export const actOf = (floor) => ACTS[Math.min(2, Math.floor((floor - 1) / 3))];
-export const isBossFloor = (floor) => floor % 3 === 0;
+
+// how many floors one act lasts; the whole dungeon is this times the number of acts
+export const ACT_LEN = 3;
+export const FLOORS = ACTS.length * ACT_LEN;
+
+// index of the act a floor belongs to, clamped so a floor past the end still answers something
+export const actIndex = (floor) => Math.max(0, Math.min(ACTS.length - 1, Math.floor((floor - 1) / ACT_LEN)));
+export const actOf = (floor) => ACTS[actIndex(floor)];
+export const actStart = (floor) => actIndex(floor) * ACT_LEN + 1;
+export const isBossFloor = (floor) => floor % ACT_LEN === 0;
+export const isLastBoss = (floor) => isBossFloor(floor) && actIndex(floor) === ACTS.length - 1;
+
+// xp needed to go from lvl to lvl+1: steep enough that a full run ends around level 10
+export const xpNext = (lvl) => 12 * lvl + 7 * lvl * lvl;
 
 export const CLASSES = {
   warrior: {
@@ -18,18 +28,25 @@ export const CLASSES = {
     blurb: { en: 'Heavy armor, a long sword and no plan B.', it: 'Armatura pesante, spada lunga e nessun piano B.' },
     hp: 36, hpLvl: 8, ac: 15, hit: 4, dmg: [2, 7], crit: 20, skills: ['cleave', 'bash', 'charge'],
     weapons: ['sword', 'axe', 'mace'], armor: 'plate',
+    talentIcons: ['shield', 'swords', 'zap'],
+    // the talents that only this class can use, by the effects they turn on (see talentBonus in game.js)
+    talentFlags: { A1: 'ac2', A2: 'hp15', A3: 'unbreakable', B3: 'rage', C2: 'bloodlust', C3: 'executioner' },
   },
   mage: {
     name: { en: 'Mage', it: 'Maga' }, art: 'hero-mage', color: '#5cc8ff',
     blurb: { en: 'Fragile, far away and very much on fire.', it: 'Fragile, lontana e decisamente in fiamme.' },
     hp: 22, hpLvl: 4, ac: 11, hit: 3, dmg: [1, 4], crit: 20, skills: ['firebolt', 'nova', 'blink'],
     weapons: ['staff', 'wand', 'orb'], armor: 'robe',
+    talentIcons: ['flame', 'snowflake', 'sparkles'],
+    talentFlags: { B2: 'ac3', B3: 'shatter', C2: 'fastskills', C3: 'ward' },
   },
   rogue: {
     name: { en: 'Rogue', it: 'Ladro' }, art: 'hero-rogue', color: '#5ee08a',
     blurb: { en: 'Strikes first, strikes twice, is gone before the third.', it: 'Colpisce per primo, colpisce due volte, al terzo è già sparito.' },
     hp: 26, hpLvl: 6, ac: 13, hit: 5, dmg: [3, 6], crit: 19, skills: ['shadowstep', 'venom', 'smoke'],
     weapons: ['dagger', 'kris', 'blade'], armor: 'leather',
+    talentIcons: ['footprints', 'droplet', 'wind'],
+    talentFlags: { A1: 'ac2', A2: 'ambush', A3: 'assassin', B3: 'virulence', C2: 'lucky', C3: 'secondwind' },
   },
 };
 

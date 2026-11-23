@@ -1,5 +1,5 @@
 // Screens, HUD, overlays and input. Wires the rules (game.js) to the renderer and to saving.
-import { CLASSES, SKILLS, TALENTS, ENEMIES, RARITIES, UPGRADES, RELICS, CONSUMABLES, SLOT_ICON, HERO_NAMES, actOf, isBossFloor } from './data.js';
+import { CLASSES, SKILLS, TALENTS, ENEMIES, RARITIES, UPGRADES, RELICS, CONSUMABLES, SLOT_ICON, HERO_NAMES, actOf, isBossFloor, FLOORS } from './data.js';
 import { Game, itemName, itemLines, itemScore, xpNext } from './game.js';
 import { Renderer } from './render.js';
 import { path as findPath, walkable, DIRS, dist } from './dungeon.js';
@@ -18,7 +18,7 @@ const write = (k, v) => { try { localStorage.setItem(k, v); } catch { /* not rem
 let meta = loadMeta();
 let g = null, R = null, screen = 'title', overlay = null;
 let targeting = null, walk = null, focusId = null, held = null, endShown = false;
-const TALENT_ICONS = { warrior: ['shield', 'swords', 'zap'], mage: ['flame', 'snowflake', 'sparkles'], rogue: ['footprints', 'droplet', 'wind'] };
+const TALENT_ICONS = Object.fromEntries(Object.entries(CLASSES).map(([id, c]) => [id, c.talentIcons]));
 const ART = [...Object.values(CLASSES).map((c) => c.art), ...new Set(Object.values(ENEMIES).map((e) => e.art))];
 
 // ---------- screens ----------
@@ -145,7 +145,7 @@ function floorIntro() {
   const act = actOf(g.floor);
   ambient(act.id);
   const box = $('#floor-card');
-  box.innerHTML = `<small>${t('floorOf', g.floor)}</small><b>${L(act.name)}</b>${isBossFloor(g.floor) ? `<small class="danger">${icon('skull')}</small>` : ''}`;
+  box.innerHTML = `<small>${t('floorOf', g.floor, FLOORS)}</small><b>${L(act.name)}</b>${isBossFloor(g.floor) ? `<small class="danger">${icon('skull')}</small>` : ''}`;
   box.classList.remove('on'); void box.offsetWidth; box.classList.add('on');
 }
 
@@ -284,7 +284,7 @@ function hud() {
   if (p.venom > 0) sts.push(['droplet', '#5ee08a', p.venom]);
   if (g.relic) sts.push([RELICS[g.relic].icon, '#ffd36b', '']);
   $('#hero .st').innerHTML = sts.map(([n, col, v]) => `<span style="color:${col}">${icon(n)}${v}</span>`).join('');
-  $('#where').innerHTML = `<b>${L(act.name)}</b><span>${t('floorOf', g.floor)}</span><span class="gold">${icon('coins')} ${p.gold}</span>`;
+  $('#where').innerHTML = `<b>${L(act.name)}</b><span>${t('floorOf', g.floor, FLOORS)}</span><span class="gold">${icon('coins')} ${p.gold}</span>`;
   // skills
   const known = g.skills();
   $('#skills').innerHTML = c.skills.map((id, i) => {

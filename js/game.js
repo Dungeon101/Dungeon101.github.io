@@ -1,5 +1,5 @@
 // The rules: turns, d20 combat, skills, talents, enemies and bosses, loot, floors. No DOM: the UI reads `ev` (events) and `log`.
-import { ACTS, actOf, isBossFloor, FLOORS, CLASSES, SKILLS, ENEMIES, BASES, TIER_ADJ, RARITIES, LEGENDARY_NAMES, MODS, CONSUMABLES, RELICS } from './data.js';
+import { ACTS, actOf, actIndex, actStart, isBossFloor, isLastBoss, FLOORS, CLASSES, SKILLS, ENEMIES, BASES, TIER_ADJ, RARITIES, LEGENDARY_NAMES, MODS, CONSUMABLES, RELICS, xpNext } from './data.js';
 import { generate, fov, los, distanceMap, walkable, canStep, tile, dist, DIRS, WALL, inside } from './dungeon.js';
 import { t, L, lang } from './i18n.js';
 
@@ -7,7 +7,7 @@ const rint = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 const chance = (p) => Math.random() < p;
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-export const xpNext = (lvl) => 12 * lvl + 7 * lvl * lvl;
+export { xpNext };
 const BAG = 16;
 
 export function itemName(it) {
@@ -76,22 +76,30 @@ export class Game {
   }
 
   // ---------- derived stats ----------
+  // the talents a class turned on: a Set of effect names, read once per call (see talentFlags in data.js)
+  flags() {
+    const f = CLASSES[this.player.cls].talentFlags || {}, T = this.player.talents, out = new Set();
+    for (const [id, effect] of Object.entries(f)) if (T[id]) out.add(effect);
+    return out;
+  }
+
+  has(effect) { return this.flags().has(effect); }
+
   ps() {
-    const p = this.player, c = CLASSES[p.cls], T = p.talents, b = this.bonus;
+    const p = this.player, c = CLASSES[p.cls], b = this.bonus, F = this.flags();
     const m = { hp: 0, hit: 0, power: 0, ac: 0, crit: 0, regen: 0, steal: 0, gold: 0, light: 0 };
     for (const it of Object.values(p.equip)) if (it) {
       m.power += it.power || 0; m.ac += it.ac || 0;
       for (const [k, v] of Object.entries(it.mods || {})) m[k] += v;
     }
-    const W = p.cls === 'warrior', M = p.cls === 'mage', R = p.cls === 'rogue';
     return {
-      maxHp: c.hp + (p.lvl - 1) * c.hpLvl + b.hp + m.hp + (W && T.A2 ? 15 : 0),
-      ac: c.ac + b.ac + m.ac + ((W || R) && T.A1 ? 2 : 0) + (M && T.B2 ? 3 : 0),
+      maxHp: c.hp + (p.lvl - 1) * c.hpLvl + b.hp + m.hp + (F.has('hp15') ? 15 : 0),
+      ac: c.ac + b.ac + m.ac + (F.has('ac2') ? 2 : 0) + (F.has('ac3') ? 3 : 0),
       hit: c.hit + Math.floor(p.lvl / 2) + m.hit,
       power: b.power + m.power + Math.floor((p.lvl - 1) / 3),
-      crit: c.crit - Math.min(2, m.crit) - (R && T.C2 ? 1 : 0),
+      crit: c.crit - Math.min(2, m.crit) - (F.has('lucky') ? 1 : 0),
       dmg: c.dmg, regen: m.regen, steal: m.steal,
-      gold: 1 + b.gold + m.gold / 100 + (R && T.C2 ? 0.25 : 0),
+      gold: 1 + b.gold + m.gold / 100 + (F.has('lucky') ? 0.25 : 0),
       light: 7 + b.light + m.light,
     };
   }
@@ -102,11 +110,11 @@ export class Game {
   }
 
   skillCd(id) {
-    const p = this.player, T = p.talents;
+    const p = this.player, T = p.talents, F = this.flags();
     let cd = SKILLS[id].cd;
     if (id === 'bash' && T.B2) cd--;
     if (id === 'firebolt' && T.A2) cd--;
-    if (p.cls === 'mage' && T.C2) cd--;
+    if (F.has('fastskills')) cd--;
     return Math.max(1, cd);
   }
 
@@ -206,7 +214,7 @@ export class Game {
     p.flags.unbreakable = false; p.flags.secondWind = false;
     const act = actOf(n), boss = isBossFloor(n);
     this.stairsOpen = !boss;
-    const within = n - (ACTS.indexOf(act) * 3 + 1); // 0..2 inside the act
+    const within = n - actStart(n); // 0..ACT_LEN-1 inside the act
     if (boss) this.spawn(act.boss, m.stairs.x, m.stairs.y, false, within);
     let count = Math.round((7 + n + rint(0, 2)) * (boss ? 0.7 : 1));
     const cells = this.freeCells(8).sort(() => Math.random() - 0.5);
@@ -241,7 +249,7 @@ export class Game {
 
   spawn(type, x, y, elite = false, within = 0) {
     // tougher inside an act (within 0..2) and from one act to the next (bosses are tuned by hand)
-    const d = ENEMIES[type], act = d.boss ? 0 : ACTS.indexOf(actOf(Math.max(1, this.floor)));
+    const d = ENEMIES[type], act = d.boss ? 0 : actIndex(Math.max(1, this.floor));
     const k = (1 + 0.12 * within) * (1 + 0.25 * act);
     const hp = Math.round(d.hp * k * (elite ? 1.6 : 1));
     const e = {
@@ -314,12 +322,12 @@ export class Game {
 
   // one attack roll. o: { flat, mult, sure, adv, kind ('melee' | shot kind | 'spell'), noCrit }
   strike(a, d, o = {}) {
-    const p = this.player, isP = a === p, st = this.ps();
+    const p = this.player, isP = a === p, st = this.ps(), F = this.flags();
     let roll = rint(1, 20);
     if (o.adv) roll = Math.max(roll, rint(1, 20));
     let crit = !o.noCrit && roll >= (isP ? st.crit : 20);
     if (isP && p.st.invis > 0) { crit = true; p.st.invis = 0; }
-    if (isP && p.cls === 'rogue' && p.talents.A2 && !d.touched) crit = true;
+    if (isP && F.has('ambush') && !d.touched) crit = true;
     const hitBonus = isP ? st.hit : a.hit, ac = isP ? d.ac : st.ac;
     const hit = o.sure || crit || (roll !== 1 && roll + hitBonus >= ac);
     if (o.kind && o.kind !== 'melee' && o.kind !== 'spell') this.emit({ t: 'shot', a: a.id, d: d.id, k: o.kind, x0: a.x, y0: a.y, x1: d.x, y1: d.y });
@@ -332,11 +340,11 @@ export class Game {
     }
     let n = o.base != null ? o.base : rint(...(isP ? st.dmg : a.dmg)) + (isP ? st.power : 0);
     n += o.flat || 0;
-    if (crit) n *= isP && p.cls === 'rogue' && p.talents.A3 ? 3 : 2;
+    if (crit) n *= isP && F.has('assassin') ? 3 : 2;
     n *= o.mult || 1;
     if (isP) n *= this.playerMult(d);
     n = Math.max(1, Math.round(n));
-    if (!isP && p.cls === 'mage' && p.talents.C3 && chance(0.25)) {
+    if (!isP && F.has('ward') && chance(0.25)) {
       this.say(t('lWard'), 'good'); this.emit({ t: 'fx', k: 'ward', x: p.x, y: p.y }); return false;
     }
     this.say(isP ? t(crit ? 'lYouCrit' : 'lYouHit', this.ename(d), n) : t(crit ? 'lCritYou' : 'lHitYou', this.ename(a), n), isP ? (crit ? 'crit' : '') : 'bad');
@@ -356,13 +364,13 @@ export class Game {
   }
 
   playerMult(d) {
-    const p = this.player, T = p.talents, st = this.ps();
+    const p = this.player, st = this.ps(), F = this.flags();
     let k = 1;
     if (this.relic === 'crown') k *= 1.15;
-    if (p.cls === 'warrior' && T.B3 && p.hp < st.maxHp / 2) k *= 1.5;
-    if (p.cls === 'warrior' && T.C3 && d.hp < d.maxHp * 0.3) k *= 1.6;
-    if (p.cls === 'mage' && T.B3 && (d.st.frozen > 0 || d.st.stun > 0)) k *= 1.6;
-    if (p.cls === 'rogue' && T.B3 && d.st.poison > 0) k *= 1.3;
+    if (F.has('rage') && p.hp < st.maxHp / 2) k *= 1.5;
+    if (F.has('executioner') && d.hp < d.maxHp * 0.3) k *= 1.6;
+    if (F.has('shatter') && (d.st.frozen > 0 || d.st.stun > 0)) k *= 1.6;
+    if (F.has('virulence') && d.st.poison > 0) k *= 1.3;
     return k;
   }
 
@@ -379,19 +387,19 @@ export class Game {
   }
 
   damage(d, n, crit, from) {
-    const p = this.player;
+    const p = this.player, F = this.flags();
     d.hp -= n;
     this.emit({ t: 'hit', id: d.id, n, crit, x: d.x, y: d.y, p: d === p });
     if (crit) this.emit({ t: 'shake', p: d === p ? 6 : 4 });
     if (d === p) {
       const st = this.ps();
-      if (p.hp <= 0 && p.cls === 'warrior' && p.talents.A3 && !p.flags.unbreakable) {
+      if (p.hp <= 0 && F.has('unbreakable') && !p.flags.unbreakable) {
         p.flags.unbreakable = true; p.hp = 1; this.say(t('lUnbreakable'), 'good'); this.emit({ t: 'fx', k: 'ward', x: p.x, y: p.y });
       }
       if (p.hp <= 0 && this.relic === 'phylactery' && !p.flags.phylactery) {
         p.flags.phylactery = true; p.hp = Math.round(st.maxHp / 2); this.say(t('lRelic'), 'good'); this.emit({ t: 'fx', k: 'level', x: p.x, y: p.y });
       }
-      if (p.hp > 0 && p.hp < st.maxHp * 0.25 && p.cls === 'rogue' && p.talents.C3 && !p.flags.secondWind) {
+      if (p.hp > 0 && p.hp < st.maxHp * 0.25 && F.has('secondwind') && !p.flags.secondWind) {
         p.flags.secondWind = true; this.say(t('lSecondWind'), 'good'); this.heal(Math.round(st.maxHp * 0.35), true);
       }
       if (p.hp <= 0) {
@@ -410,7 +418,7 @@ export class Game {
     this.stats.kills++;
     this.say(t('lKill', this.ename(e)), 'kill');
     this.emit({ t: 'die', id: e.id, x: e.x, y: e.y, type: e.type, boss: e.boss, elite: e.elite });
-    if (p.cls === 'warrior' && p.talents.C2) this.heal(3, true);
+    if (this.has('bloodlust')) this.heal(3, true);
     this.gainXp(e.xp);
     if (d.split) for (const c of this.freeNear(e.x, e.y).slice(0, 2)) { const s = this.spawn('slimelet', c.x, c.y); s.awake = true; }
     const drop = (it) => { const c = this.blocked(e.x, e.y) || this.items.some((i) => i.x === e.x && i.y === e.y) ? this.freeNear(e.x, e.y)[0] : e; if (c) this.items.push({ x: c.x, y: c.y, it }); };
@@ -420,7 +428,7 @@ export class Game {
       drop({ kind: 'gold', n: 40 * this.floor });
       this.stats.bosses.push(e.type);
       this.emit({ t: 'shake', p: 14 });
-      if (this.floor >= FLOORS) { this.over = 'win'; this.emit({ t: 'over', win: true }); return; }
+      if (isLastBoss(this.floor)) { this.over = 'win'; this.emit({ t: 'over', win: true }); return; }
       this.stairsOpen = true;
       this.say(t('lStairsOpen'), 'sys');
       this.emit({ t: 'fx', k: 'stairs', x: this.map.stairs.x, y: this.map.stairs.y });
