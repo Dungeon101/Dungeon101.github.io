@@ -39,15 +39,13 @@ export const CLASSES = {
     hp: 36, hpLvl: 8, ac: 15, hit: 4, dmg: [2, 7], crit: 20, skills: ['cleave', 'bash', 'charge'],
     weapons: ['sword', 'axe', 'mace', 'hammer', 'greatsword', 'spear'], armor: 'plate',
     // the talents that only this class can use, by the effects they turn on (see talentBonus in game.js)
-    talentFlags: { A1: 'ac2', A2: 'hp15', A3: 'unbreakable', A4: 'lastStand', B3: 'rage', B4: 'trance', C2: 'bloodlust', C3: 'executioner', C4: 'secondwind' },
   },
   mage: {
     name: { en: 'Mage', it: 'Maga' }, art: 'hero-mage', color: '#5cc8ff',
     pool: 20, poolLvl: 1, regen: 3,
     blurb: { en: 'Fragile, far away and very much on fire.', it: 'Fragile, lontana e decisamente in fiamme.' },
-    hp: 24, hpLvl: 5, ac: 12, hit: 4, dmg: [2, 5], crit: 20, skills: ['firebolt', 'nova', 'blink'],
+    hp: 30, hpLvl: 6, ac: 13, hit: 5, dmg: [3, 6], crit: 20, skills: ['firebolt', 'nova', 'blink'],
     weapons: ['staff', 'wand', 'orb', 'tome', 'rod', 'scepter'], armor: 'robe',
-    talentFlags: { A4: 'kindled', B2: 'ac3', B3: 'shatter', B4: 'deepfreeze', C2: 'fastskills', C3: 'ward', C4: 'mastery' },
   },
   rogue: {
     name: { en: 'Rogue', it: 'Ladro' }, art: 'hero-rogue', color: '#5ee08a',
@@ -55,7 +53,6 @@ export const CLASSES = {
     blurb: { en: 'Strikes first, strikes twice, is gone before the third.', it: 'Colpisce per primo, colpisce due volte, al terzo è già sparito.' },
     hp: 28, hpLvl: 7, ac: 14, hit: 6, dmg: [3, 6], crit: 19, skills: ['shadowstep', 'venom', 'smoke'],
     weapons: ['dagger', 'kris', 'blade', 'rapier', 'sabre', 'claw'], armor: 'leather',
-    talentFlags: { A1: 'ac2', A2: 'ambush', A3: 'assassin', A4: 'deadlyaim', B3: 'virulence', B4: 'twinfangs', C2: 'lucky', C3: 'secondwind', C4: 'ghost' },
   },
   cleric: {
     name: { en: 'Cleric', it: 'Chierico' }, art: 'hero-cleric', color: '#ffd76b',
@@ -63,7 +60,6 @@ export const CLASSES = {
     blurb: { en: 'Keeps the party breathing, mostly itself.', it: 'Tiene in vita la compagnia, soprattutto sé stesso.' },
     hp: 32, hpLvl: 8, ac: 14, hit: 5, dmg: [3, 5], crit: 20, skills: ['smite', 'mend', 'sanctuary'],
     weapons: ['mace', 'hammer', 'staff', 'scepter'], armor: 'mail',
-    talentFlags: { A1: 'ac2', A2: 'hp15', A3: 'consecrated', B3: 'zeal', C3: 'blessing', C4: 'lastStand' },
   },
   paladin: {
     name: { en: 'Paladin', it: 'Paladino' }, art: 'hero-paladin', color: '#e8e2c8',
@@ -71,7 +67,6 @@ export const CLASSES = {
     blurb: { en: 'Slow, loud, and very hard to move.', it: 'Lento, rumoroso e molto difficile da spostare.' },
     hp: 42, hpLvl: 9, ac: 17, hit: 5, dmg: [3, 7], crit: 20, skills: ['aegis', 'hammer', 'consecrate'],
     weapons: ['sword', 'mace', 'hammer', 'greatsword', 'spear'], armor: 'plate',
-    talentFlags: { A1: 'ac3', A2: 'hp15', A3: 'unbreakable', B3: 'shatter', C2: 'bulwark', C4: 'lastStand' },
   },
   hunter: {
     name: { en: 'Hunter', it: 'Cacciatore' }, art: 'hero-hunter', color: '#8fd14f',
@@ -79,7 +74,6 @@ export const CLASSES = {
     blurb: { en: 'Shoots from three rooms away and lets the wolf do the talking.', it: 'Spara da tre stanze di distanza e lascia parlare il lupo.' },
     hp: 30, hpLvl: 7, ac: 13, hit: 6, dmg: [3, 6], crit: 19, skills: ['volley', 'snare', 'beast'],
     weapons: ['bow', 'crossbow', 'sling', 'dagger', 'spear'], armor: 'hide',
-    talentFlags: { A1: 'ac2', A2: 'marksman', A3: 'assassin', B3: 'virulence', C3: 'packbond', C4: 'ghost' },
   },
 };
 

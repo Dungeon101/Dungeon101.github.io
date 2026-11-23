@@ -86,10 +86,14 @@ export class Game {
   }
 
   // ---------- derived stats ----------
-  // the talents a class turned on: a Set of effect names, read once per call (see talentFlags in data.js)
+  // the rules the hero's talents turned on: a Set of effect names built from the 'flag:' effects of the
+  // nodes he bought, plus anything the class grants from the start
   flags() {
-    const f = CLASSES[this.player.cls].talentFlags || {}, T = this.player.talents, out = new Set();
-    for (const [id, effect] of Object.entries(f)) if (T[id]) out.add(effect);
+    const T = this.player.talents, out = new Set();
+    for (const br of TALENTS[this.player.cls] || []) for (const n of br) {
+      if (!T[n.id]) continue;
+      for (const k of Object.keys(n.eff || {})) if (k.startsWith('flag:')) out.add(k.slice(5));
+    }
     return out;
   }
 
@@ -398,7 +402,10 @@ export class Game {
     const dmgK = Math.pow(1.4, n - 1);
     const hp = Math.round(d.hp * k);
     // a boss pays like an elite of his floor, scaled by the floor: the hero has to come out of it at the right level
-    const xp = d.boss ? Math.round(d.xp * 0.5 * k) : Math.round(d.xp * k * (elite ? 2 : 1));
+    // xp goes by the act, not by the floor: with the floor's own growth a hero who survives two acts is
+    // level forty and never has to choose anything again
+    const actK = Math.pow(1.45, act * ACT_LEN);
+    const xp = d.boss ? Math.round(d.xp * 0.5 * actK) : Math.round(d.xp * actK * (elite ? 2 : 1));
     // a boss climbs less than his floor: the whole act has already made him twice the man the last one was,
     // and the hero cannot be expected to outgrow the crypt on his first run.
     // A boss hits for about a third of the hero's HP: the d20 roll decides the fight, not the first two blows.
@@ -407,9 +414,12 @@ export class Game {
     const hpB = d.boss ? Math.round(d.hp * actStartHp * (1 + 0.1 * (n - 1 - act * ACT_LEN))) : Math.round(hp * (elite ? 1.6 : 1));
     const bossDmg = Math.max(4, Math.round((4 + n * 1.6) * (1 + 0.08 * act)));
     const dmgB = [Math.round(bossDmg * 0.75), Math.round(bossDmg * 1.15)];
+    // armour grows with the act, not with the floor: a d20 roll beats one point of armour one time in twenty,
+    // so armour that climbs every floor turns the game into a wall the hero cannot climb
+    const acB = d.boss ? d.ac + act : d.ac + Math.floor(act / 2);
     const e = {
-      id: this.uid++, kind: 'enemy', type, x, y, hp: hpB, maxHp: hpB, ac: d.ac + (elite ? 1 : 0), hit: d.hit + Math.floor(act * 0.5) + (within >= 2 ? 1 : 0) + (elite ? 1 : 0),
-      dmg: d.boss ? dmgB : [Math.round(d.dmg[0] * dmgK) + (elite ? 1 : 0), Math.round(d.dmg[1] * dmgK) + (elite ? 2 : 0)], xp,
+      id: this.uid++, kind: 'enemy', type, x, y, hp: hpB, maxHp: hpB, ac: acB + (elite ? 1 : 0), hit: d.hit + Math.floor(act * 0.5) + (within >= 2 ? 1 : 0) + (elite ? 1 : 0),
+      dmg: d.boss ? dmgB : [Math.round(d.dmg[0] * dmgK) + (elite ? 1 : 0), Math.round(d.dmg[1] * dmgK) + (elite ? 2 : 0)], xp, turn: 0,
       elite, boss: !!d.boss, st: {}, cd: {}, energy: 0, awake: false, seen: -99, touched: false,
     };
     this.enemies.push(e);
@@ -1146,6 +1156,8 @@ export class Game {
       }
     } else if (e.awake && this.turn - e.seen > 12) e.awake = false;
     if (!e.awake || p.st.invis > 0) { if (chance(0.3)) this.wander(e); return; }
+    // the hero gets one move to every enemy's one: a floor with nine of them is not nine times as hard
+    if (!e.boss && !e.ally) { e.turn = (e.turn || 0) + 1; if (e.turn % 2) { if (chance(0.35)) this.wander(e); return; } }
     if (e.st.fear > 0) { this.stepBy(e, dm, 1); return; }
     if (e.boss && this.bossAct(e, d)) return;
     if (def.ai === 'erratic' && chance(0.4)) { this.wander(e); return; }
