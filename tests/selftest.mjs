@@ -4,8 +4,8 @@
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { generate, distanceMap, walkable, canStep, DIRS, dist } from '../js/dungeon.js';
-import { Game, itemScore } from '../js/game.js';
-import { CLASSES, TALENTS, SKILLS, FLOORS, ACTS, ENEMIES, RELICS, isBossFloor, actIndex } from '../js/data.js';
+import { Game, itemScore, STAT_KEYS, FLAGS } from '../js/game.js';
+import { CLASSES, TALENTS, BRANCHES, SKILLS, FLOORS, ACTS, ENEMIES, RELICS, isBossFloor, actIndex } from '../js/data.js';
 
 // 1. floors: start and stairs reachable, every walkable tile connected
 for (let f = 1; f <= FLOORS; f++) for (let i = 0; i < 40; i++) {
@@ -116,18 +116,52 @@ for (const cls of Object.keys(CLASSES)) {
   const avg = floors.reduce((a, b) => a + b, 0) / runs;
   console.log(`${cls.padEnd(8)} avg floor ${avg.toFixed(1)}  wins ${wins}/${runs}  avg level ${(lv / runs).toFixed(1)}  deaths ${JSON.stringify(causes)}`);
 }
-// talents are all reachable, three branches of the same depth for every class
+// every class has five branches, ten levels deep, with two or three nodes to choose from on each level,
+// and every node either does something or teaches a skill that exists
 const depths = new Set();
 for (const c of Object.keys(TALENTS)) {
-  assert.equal(TALENTS[c].length, 3, `${c}: three branches`);
+  assert.equal(TALENTS[c].length, 5, `${c}: five branches`);
+  assert.equal(BRANCHES[c].length, 5, `${c}: a name and an icon per branch`);
   depths.add(TALENTS[c][0].length);
-  for (const b of TALENTS[c]) assert.equal(b.length, TALENTS[c][0].length, `${c}: branches of different depth`);
-  assert.deepEqual(TALENTS[c].map((b) => [...new Set(b.map((n) => n.id[0]))]), [['A'], ['B'], ['C']], `${c}: branch letters`);
+  for (const b of TALENTS[c]) {
+    assert.equal(b.length, TALENTS[c][0].length, `${c}: branches of different depth`);
+    assert.deepEqual([...new Set(b.map((n) => n.id[0]))], [b[0].id[0]], `${c}: one letter per branch`);
+    assert(/^[A-E](10|[1-9])[ab]?$/.test(b[0].id), `${c}: odd node id ${b[0].id}`);
+    for (let l = 1; l <= 10; l++) {
+      const row = b.filter((n) => Number(n.id.slice(1).replace(/[ab]$/, '')) === l);
+      assert(row.length >= 2 && row.length <= 3, `${c} ${b[0].id[0]}${l}: ${row.length} choices`);
+    }
+  }
+  assert.equal(new Set(TALENTS[c].flat().map((n) => n.id)).size, TALENTS[c].flat().length, `${c}: no repeated node id`);
+  const nodes = TALENTS[c].flat();
+  for (const n of nodes) {
+    const eff = Object.entries(n.eff || {});
+    assert(eff.length > 0, `${c} ${n.id}: no effect`);
+    assert(n.desc.en.length > 3 && n.desc.it.length > 3, `${c} ${n.id}: no description`);
+    for (const [k] of eff) {
+      if (k.startsWith('skill:')) assert(SKILLS[k.slice(6)], `${c} ${n.id}: unknown skill ${k}`);
+      else if (k.startsWith('flag:')) assert(FLAGS.has(k.slice(5)), `${c} ${n.id}: flag ${k} is never read by the rules`);
+      else assert(STAT_KEYS.has(k), `${c} ${n.id}: unknown stat ${k}`);
+    }
+  }
   assert(existsSync(`assets/img/${CLASSES[c].art}.webp`), `${c}: picture assets/img/${CLASSES[c].art}.webp`);
   const bosses = Object.values(ENEMIES).filter((e) => e.boss);
   assert.equal(bosses.length, ACTS.length, 'one boss per act');
   for (const b of bosses) assert(existsSync(`assets/img/${b.art}.webp`), `boss picture ${b.art}`);
-  assert.equal(CLASSES[c].talentIcons.length, 3, `${c}: an icon per branch`);
 }
-assert.equal(depths.size, 1, 'every class has the same number of talent tiers');
+assert.equal(depths.size, 1, 'every class has the same number of talent levels');
+// mana: every skill has a price, and the class has a pool to pay it from
+for (const [id, sk] of Object.entries(SKILLS)) assert(Number.isInteger(sk.mana) && sk.mana > 0, `skill ${id}: no mana cost`);
+for (const c of Object.keys(CLASSES)) {
+  assert(CLASSES[c].pool > 0 && CLASSES[c].regen > 0, `${c}: no mana pool`);
+  for (const id of CLASSES[c].skills) assert(SKILLS[id], `${c}: unknown skill ${id}`);
+}
+// a mage cannot cast the same spell every turn: the pool does not refill that fast
+{
+  const g = Game.create({ cls: 'mage', name: 'Test', meta: {} });
+  const cost = g.skillCost('firebolt'), regen = g.manaRegen();
+  assert(cost > regen, `firebolt costs ${cost} and comes back at ${regen} a turn: no reason not to spam it`);
+  g.player.mp = cost;
+  assert(g.useSkill('firebolt', 0, 0) === false || g.player.mp < cost, 'a spell was cast without paying');
+}
 console.log('selftest ok');

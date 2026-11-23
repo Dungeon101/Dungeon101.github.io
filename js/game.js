@@ -1,5 +1,5 @@
 // The rules: turns, d20 combat, skills, talents, enemies and bosses, loot, floors. No DOM: the UI reads `ev` (events) and `log`.
-import { ACTS, actOf, actIndex, actStart, isBossFloor, isLastBoss, FLOORS, CLASSES, SKILLS, ENEMIES, BASES, TIER_ADJ, RARITIES, LEGENDARY_NAMES, MODS, CONSUMABLES, RELICS, xpNext } from './data.js';
+import { ACT_LEN, ACTS, actOf, actIndex, actStart, isBossFloor, isLastBoss, FLOORS, CLASSES, SKILLS, TALENTS, ENEMIES, BASES, TIER_ADJ, RARITIES, LEGENDARY_NAMES, MODS, CONSUMABLES, RELICS, xpNext } from './data.js';
 import { generate, fov, los, distanceMap, walkable, canStep, tile, dist, DIRS, WALL, inside } from './dungeon.js';
 import { t, L, lang } from './i18n.js';
 
@@ -9,6 +9,15 @@ const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export { xpNext };
 const BAG = 16;
+
+// the stat names a talent may raise (see talentBonus and ps), and the rules a talent may turn on
+export const STAT_KEYS = new Set(['hp', 'ac', 'power', 'hit', 'crit', 'regen', 'sight', 'gold', 'spell', 'pool', 'manaRegen', 'melee', 'shieldMax', 'petPower', 'heal', 'steal']);
+// every flag a talent can raise, listed once here so a typo in data.js fails the tests instead of doing nothing
+export const FLAGS = new Set(('unbreakable lastStand rage concussion trance bloodlust executioner whirlwind shieldwall rampage bloodtrail vanguard ' +
+  'unstoppable secondwind packbond lucky kindling pyromancy inferno searing kindled combustion pyre miracle shatter deepfreeze icewall wintergrasp ' +
+  'abszero ward mastery mirror timewarp manasurge siphon barrier ambush assassin ghost shadowsummon toxicity virulence twinfangs plaguebearer ' +
+  'creepingrot vanish traps bleeding consecrated zeal wrath judgement purgingfire retribution shelter guardian vigil shieldoffaith sacredvow martyr ' +
+  'aura shatterblow earthshaker frenzy bloodbond marksman rapidfire piercing poisontrap camouflage pittrap').split(' '));
 
 export function itemName(it) {
   if (!it) return '';
@@ -42,15 +51,15 @@ export class Game {
   }
 
   // a fresh run. meta: sanctuary state (upgrades fixed for the whole run)
-  static create({ cls, name, relic = null, heirloom = null, meta = {} }) {
+  static create({ cls, name, relic = null, relicLvl = 1, heirloom = null, meta = {} }) {
     const up = (id) => meta.upgrades?.[id] || 0;
     const player = {
-      id: 1, kind: 'player', cls, name, x: 0, y: 0, hp: 1, lvl: 1, xp: 0, points: 1 + up('insight'), talents: {}, cds: {}, st: {},
+      id: 1, kind: 'player', cls, name, x: 0, y: 0, hp: 1, mp: 0, xp: 0, lvl: 1, points: 1 + up('insight'), talents: {}, cds: {}, st: {},
       equip: { weapon: null, armor: null, trinket: null }, bag: [], gold: 0, flags: {}, venom: 0, pet: 0,
     };
     const g = new Game({
-      floor: 0, turn: 0, uid: 2, player, enemies: [], items: [], chests: [], hazards: [], fountain: null, stairsOpen: true, log: [], over: null, killer: null,
-      relic, bonus: { hp: up('vigor') * 5, power: up('edge'), ac: up('guard'), gold: up('fortune') * 0.2, light: up('torch') },
+      floor: 0, turn: 0, uid: 2, player, enemies: [], items: [], chests: [], hazards: [], fountain: null, merchant: null, stairsOpen: true, log: [], over: null, killer: null,
+      relic, relicLvl: clamp(relicLvl || 1, 1, 5), bonus: { hp: up('vigor') * 5, power: up('edge'), ac: up('guard'), gold: up('fortune') * 0.2, light: up('torch') },
       stats: { kills: 0, gold: 0, bosses: [] }, map: null,
     });
     player.equip.weapon = g.makeEquip('weapon', 1, 0, true);
@@ -64,7 +73,7 @@ export class Game {
       player.equip[it.slot] = it;
     }
     g.newFloor(1);
-    player.hp = g.ps().maxHp;
+    player.hp = g.ps().maxHp; player.mp = g.manaPool();
     return g;
   }
 
@@ -93,40 +102,79 @@ export class Game {
   critChance() { return clamp(this.ps().crit + Math.floor(this.player.lvl / 3), 5, 60); }
 
   ps() {
-    const p = this.player, c = CLASSES[p.cls], b = this.bonus, F = this.flags();
+    const p = this.player, c = CLASSES[p.cls], b = this.bonus, F = this.flags(), tb = this.talentBonus().stat, near = (this.enemies || []).filter((e) => dist(e, p) === 1);
     const m = { hp: 0, hit: 0, power: 0, ac: 0, crit: 0, regen: 0, steal: 0, gold: 0, light: 0 };
     for (const it of Object.values(p.equip)) if (it) {
       m.power += it.power || 0; m.ac += it.ac || 0;
       for (const [k, v] of Object.entries(it.mods || {})) m[k] += v;
     }
     return {
-      maxHp: c.hp + (p.lvl - 1) * c.hpLvl + b.hp + m.hp + (F.has('hp15') ? 15 : 0),
-      ac: c.ac + b.ac + m.ac + (F.has('ac2') ? 2 : 0) + (F.has('ac3') ? 3 : 0),
-      hit: c.hit + Math.floor(p.lvl / 2) + m.hit + (F.has('marksman') ? 2 : 0) + (F.has('deadlyaim') ? 2 : 0),
-      power: b.power + m.power + Math.floor((p.lvl - 1) / 3),
-      crit: c.crit - Math.min(2, m.crit) - (F.has('lucky') ? 1 : 0) - (F.has('deadlyaim') ? 1 : 0),
-      dmg: c.dmg, regen: m.regen, steal: m.steal,
-      gold: 1 + b.gold + m.gold / 100 + (F.has('lucky') ? 0.25 : 0),
-      light: 7 + b.light + m.light + (F.has('huntereye') ? 2 : 0),
+      maxHp: Math.round((c.hp + (p.lvl - 1) * c.hpLvl + b.hp + m.hp + (tb.hp || 0) + (this.relic === 'heart' ? 8 * this.rl() : 0)) * (this.relic === 'key' ? 1 + 0.1 * this.rl() : 1)),
+      ac: c.ac + b.ac + m.ac + (tb.ac || 0) + (this.relic === 'scale' ? 2 * this.rl() : 0) + (F.has('shieldwall') && near.length > 1 ? 2 : 0) + (F.has('aura') ? this.enemies.filter((e) => e.ally && dist(e, p) === 1).length : 0),
+      hit: c.hit + Math.floor(p.lvl / 2) + m.hit + (tb.hit || 0),
+      power: b.power + m.power + Math.floor((p.lvl - 1) / 3) + (tb.power || 0) + (F.has('rampage') ? Math.min(8, this.stats.kills - (this.floorKills || 0)) : 0),
+      crit: c.crit - Math.min(2, m.crit) - (F.has('lucky') ? 1 : 0) - (tb.crit ? 20 - tb.crit : 0),
+      regenRelic: this.relic === 'heart' && this.rl() >= 4 ? 1 : 0,
+      dmg: c.dmg, regen: m.regen + (tb.regen || 0) + (this.relic === 'heart' && this.rl() >= 4 ? 1 : 0), steal: m.steal + (tb.steal || 0),
+      gold: 1 + b.gold + m.gold / 100 + (tb.gold || 0) / 100 + (F.has('lucky') ? 0.25 : 0) + (this.relic === 'coin' ? 0.2 * this.rl() : 0),
+      light: 7 + b.light + m.light + (tb.sight || 0) + (this.relic === 'lantern' ? this.rl() : 0),
+      melee: 1 + (tb.melee || 0) / 100, spell: 1 + (tb.spell || 0) / 100, heal: 1 + (tb.heal || 0) / 100,
+      shieldMax: 1 + (tb.shieldMax || 0) / 100, petPower: 1 + (tb.petPower || 0) / 100,
     };
   }
 
-  skills() { // the class skills the hero knows
-    const p = this.player, s = CLASSES[p.cls].skills;
-    return s.filter((_, i) => i === 0 || (i === 1 ? p.talents.B1 : p.talents.C1));
+  // every skill the hero knows: the first of the class always, the others when a talent node grants them
+  skills() {
+    const p = this.player, out = [CLASSES[p.cls].skills[0]], nodes = TALENTS[p.cls].flat();
+    for (const [id, lvl] of Object.entries(p.talents || {})) {
+      if (!lvl) continue;
+      for (const k of Object.keys(nodes.find((x) => x.id === id)?.eff || {})) {
+        const sk = k.slice(6);
+        if (k.startsWith('skill:') && !out.includes(sk)) out.push(sk);
+      }
+    }
+    return out;
   }
 
-  skillCd(id) {
-    const p = this.player, T = p.talents, F = this.flags();
-    let cd = SKILLS[id].cd;
-    if (id === 'bash' && T.B2) cd--;
-    if (id === 'bash' && T.B4) cd -= 2;
-    if (id === 'firebolt' && T.A2) cd--;
-    if (id === 'mend' && T.B2) cd -= 2;
-    if (id === 'sanctuary' && T.C2) cd -= 3;
-    if (F.has('fastskills')) cd--;
-    return Math.max(1, cd);
+  // what the talent nodes add up to: flat stats, percentages and the flags the rules read
+  talentBonus() {
+    const p = this.player, out = { stat: {}, flag: new Set() };
+    const nodes = TALENTS[p.cls].flat();
+    for (const [id, lvl] of Object.entries(p.talents || {})) {
+      if (!lvl) continue;
+      const n = nodes.find((x) => x.id === id);
+      for (const [k, v] of Object.entries(n?.eff || {})) {
+        if (k.startsWith('flag:')) out.flag.add(k.slice(5));
+        else if (!k.startsWith('skill:')) out.stat[k] = (out.stat[k] || 0) + v;
+      }
+    }
+    return out;
   }
+
+  // mana is the budget of the turn: a skill costs its price, and a few points come back every turn,
+  // so a spell cannot be spammed and has to be chosen. The pool grows with the level and the talents.
+  // the level of the relic in hand (1..5), 0 when you carry none
+  rl() { return this.relic ? (this.relicLvl || 1) : 0; }
+
+  manaPool() {
+    const p = this.player, c = CLASSES[p.cls], tb = this.talentBonus().stat;
+    return Math.round(c.pool + (p.lvl - 1) * c.poolLvl + (tb.pool || 0) + (this.bonus.pool || 0) + (this.relic === 'hourglass' ? 2 * this.rl() : 0));
+  }
+  manaRegen() {
+    const p = this.player, c = CLASSES[p.cls], tb = this.talentBonus().stat;
+    return Math.max(1, c.regen + Math.floor(p.lvl / 5) + (tb.manaRegen || 0));
+  }
+  // what a skill costs right now, after the talents that make one cheaper
+  skillCost(id) {
+    const F = this.flags(), base = SKILLS[id].mana ?? SKILLS[id].cd;
+    let cost = base;
+    if (F.has('trance')) cost -= 1;
+    if (id === 'firebolt' && F.has('pyromancy')) cost -= 1;
+    if (id === 'whirlwind' && F.has('whirlwind')) cost -= 2;
+    if (F.has('timewarp') && this.turn % 3 === 0) cost = 0;
+    return Math.max(0, cost);
+  }
+  canCast(id) { return this.skills().includes(id) && this.player.mp >= this.skillCost(id) && (this.player.cds[id] || 0) === 0; }
 
   // ---------- helpers ----------
   say(s, c = '') { this.log.push({ s, c }); if (this.log.length > 80) this.log.shift(); }
@@ -145,6 +193,8 @@ export class Game {
     const p = this.player, m = this.map;
     fov(m, p.x, p.y, this.ps().light, this.vis);
     for (let i = 0; i < this.vis.length; i++) if (this.vis[i]) m.seen[i] = 1;
+    // the Eternal Lantern lights up every enemy at level 3
+    if (this.relic === 'lantern' && this.rl() >= 3) for (const e of this.enemies) if (!e.ally) this.vis[e.y * m.w + e.x] = 1;
   }
 
   freeCells(minFromStart = 0) {
@@ -190,16 +240,30 @@ export class Game {
     return it;
   }
 
-  makeUse(kind) { return { uid: this.uid++, slot: 'use', kind }; }
+  makeUse(kind, n = 1) { return { uid: this.uid++, slot: 'use', kind, n }; }
+  // two of the same potion are one stack: consumables of a kind pile up to 9, gear never piles
+  give(it) {
+    const p = this.player;
+    if (it.slot === 'use') {
+      const same = p.bag.find((x) => x.slot === 'use' && x.kind === it.kind && (x.n || 1) < 9);
+      if (same) { same.n = (same.n || 1) + (it.n || 1); return same; }
+    }
+    if (p.bag.length >= BAG) return null;
+    p.bag.push(it);
+    return it;
+  }
+  // how many free places the bag has, counting a stack as one
+  bagFree() { return BAG - this.player.bag.length; }
 
   randomLoot(rarityMin = 0) {
     const r = Math.random();
-    if (r < 0.18) return this.makeUse('heal');
-    if (r < 0.4) return this.makeUse(pick(['fire', 'teleport', 'map']));
+    if (r < 0.16) return this.makeUse('heal', rint(1, 2));
+    if (r < 0.3) return this.makeUse(pick(['fire', 'frost', 'lightning', 'teleport', 'map', 'identify', 'ward', 'rage', 'stoneskin', 'mana', 'antidote', 'smoke', 'food', 'greatHeal']));
     return this.makeEquip(pick(['weapon', 'armor', 'armor', 'trinket']), 0, rarityMin);
   }
 
-  give(it, x, y) { // into the bag, or on the floor when the bag is full
+  // into the bag (a stack grows), or on the floor when there is no room left
+  take(it, x, y) {
     const p = this.player;
     if (it.kind === 'gold') {
       const n = Math.round(it.n * this.ps().gold);
@@ -207,8 +271,9 @@ export class Game {
       this.say(t('lGold', n), 'gold'); this.emit({ t: 'fx', k: 'gold', x, y, n });
       return true;
     }
-    if (p.bag.length >= BAG) { this.items.push({ x, y, it }); this.say(t('lFull', itemName(it))); return false; }
-    p.bag.push(it);
+    const same = it.slot === 'use' && p.bag.find((x) => x.slot === 'use' && x.kind === it.kind && (x.n || 1) < 9);
+    if (!same && p.bag.length >= BAG) { this.items.push({ x, y, it }); this.say(t('lFull', itemName(it))); return false; }
+    this.give(it);
     this.say(t('lPick', itemName(it)), 'loot');
     this.emit({ t: 'fx', k: 'pickup', x, y, it });
     return true;
@@ -220,14 +285,19 @@ export class Game {
     const m = generate(n);
     this.map = m;
     this.vis = new Uint8Array(m.w * m.h);
-    this.enemies = []; this.items = []; this.chests = []; this.hazards = []; this.fountain = null;
+    this.enemies = []; this.items = []; this.chests = []; this.hazards = []; this.fountain = null; this.merchant = null;
     const p = this.player;
     p.x = m.start.x; p.y = m.start.y;
-    p.flags.unbreakable = false; p.flags.secondWind = false;
+    p.flags.unbreakable = false; p.flags.secondWind = false; p.flags.guardian = false; p.flags.mirror = false;
+    p.mp = this.manaPool();
+    this.floorKills = this.stats.kills;
     const act = actOf(n), boss = isBossFloor(n);
     this.stairsOpen = !boss;
     const within = n - actStart(n); // 0..ACT_LEN-1 inside the act
-    if (this.relic === 'brand') p.st.shield = 15;
+    if (this.relic === 'brand') p.st.shield = Math.round(10 * this.rl() * this.ps().shieldMax);
+    if (this.relic === 'hourglass') p.mp = Math.min(this.manaPool(), p.mp + 6 * this.rl());
+    if (this.relic === 'totem' && !this.pets().length) { const spot = this.freeNear(p.x, p.y, 2)[0]; if (spot) this.summonWolf(spot); }
+    if (this.has('barrier')) p.st.shield = (p.st.shield || 0) + Math.round(10 * this.ps().shieldMax);
     if (this.has('consecrated')) this.heal(10, true);
     if (p.pet) this.tunePet();
     if (boss) this.spawn(act.boss, m.stairs.x, m.stairs.y, false, within);
@@ -256,22 +326,90 @@ export class Game {
       if (walkable(m, c.x, c.y)) this.chests.push({ ...c, open: false });
     }
     if (chance(0.45) && free.length) this.fountain = { ...take(), used: false };
+    // a merchant shows up on a floor of his own from the second act on, never on a boss floor
+    this.merchant = null;
+    if (!boss && n >= 2 && chance(0.3) && free.length) this.merchant = { ...take(), stock: this.merchantStock(n) };
     delete m.dist;
     this.recompute();
     this.say(t('lWelcome', n), 'sys');
     this.emit({ t: 'floor', n });
   }
 
+  merchantStock(n) {
+    const stock = [];
+    const uses = ['heal', 'heal', 'greatHeal', 'mana', 'food', 'antidote', 'smoke', 'ward', 'rage', 'stoneskin', 'fire', 'frost', 'lightning', 'teleport', 'map', 'identify'];
+    for (let i = 0; i < 4; i++) {
+      const kind = pick(uses), it = this.makeUse(kind, kind === 'heal' ? 2 : 1);
+      stock.push({ it, price: Math.round(this.priceOf(it) * (1 - this.discount())), sold: false });
+    }
+    for (let i = 0; i < 3; i++) {
+      const it = this.makeEquip(pick(['weapon', 'armor', 'trinket']), n + 1, 1);
+      stock.push({ it, price: Math.round(this.priceOf(it) * (1 - this.discount())), sold: false });
+    }
+    return stock;
+  }
+
+  // what a merchant pays for something, and asks for it: gear keeps its value, potions are cheap
+  priceOf(it) {
+    if (it.slot === 'use') return it.kind === 'greatHeal' ? 22 : 10 + this.floor * 2;
+    return Math.round((itemScore(it) + 3) * (2.2 + this.floor * 0.5));
+  }
+  sellPrice(it) { return Math.max(3, Math.round(this.priceOf(it) * 0.4)); }
+  // the Miser's Coin makes everything in a shop cheaper
+  discount() { return this.relic === 'coin' ? 0.05 * this.rl() : 0; }
+  // the merchant's stock, with what he pays for everything in the bag
+  shop() {
+    const p = this.player;
+    return {
+      stock: (this.merchant?.stock || []).map((x, i) => ({ ...x, i, can: p.gold >= x.price })),
+      sell: p.bag.map((it) => ({ it, price: this.sellPrice(it) })),
+    };
+  }
+  buy(i) {
+    const p = this.player, x = this.merchant?.stock[i];
+    if (!x || x.sold) return false;
+    if (p.gold < x.price) { this.say(t('lNoGold'), 'bad'); return false; }
+    if (x.it.slot === 'use') {
+      const same = p.bag.find((b) => b.slot === 'use' && b.kind === x.it.kind && (b.n || 1) + (x.it.n || 1) <= 9);
+      if (!same && p.bag.length >= BAG) { this.say(t('lFull', itemName(x.it))); return false; }
+    } else if (p.bag.length >= BAG) { this.say(t('lFull', itemName(x.it))); return false; }
+    p.gold -= x.price; x.sold = true;
+    this.give(x.it);
+    this.say(t('lBought', itemName(x.it)), 'gold');
+    this.emit({ t: 'buy', i });
+    return true;
+  }
+  sell(uid) {
+    const p = this.player, i = p.bag.findIndex((x) => x.uid === uid);
+    if (i < 0) return false;
+    const it = p.bag[i], price = this.sellPrice(it);
+    p.bag.splice(i, 1); p.gold += price; this.stats.gold += price;
+    this.say(t('lSold', itemName(it), price), 'gold');
+    this.emit({ t: 'sell', uid });
+    return true;
+  }
+
   spawn(type, x, y, elite = false, within = 0) {
-    // tougher inside an act (within 0..2) and from one act to the next (bosses are tuned by hand)
-    const d = ENEMIES[type], act = d.boss ? 0 : actIndex(Math.max(1, this.floor));
-    const k = (1 + 0.12 * within) * (1 + 0.25 * act);
-    // a monster's damage barely moves with its act: the hero grows through his level, his weapon and his talents
-    const dmgK = 1 + 0.08 * act + 0.05 * within;
-    const hp = Math.round(d.hp * k * (elite ? 1.6 : 1));
+    // the game is meant to be hard: every floor is about half again as strong as the one before it.
+    // inside an act that is 1.45 a floor, from one act to the next the boss floor of the act before carries over.
+    const d = ENEMIES[type], n = Math.max(1, this.floor), act = actIndex(n);
+    const k = Math.pow(1.45, n - 1);
+    // damage climbs more slowly than HP: an enemy that hits for half the hero's HP a blow kills without a fight
+    const dmgK = Math.pow(1.4, n - 1);
+    const hp = Math.round(d.hp * k);
+    // a boss pays like an elite of his floor, scaled by the floor: the hero has to come out of it at the right level
+    const xp = d.boss ? Math.round(d.xp * 0.5 * k) : Math.round(d.xp * k * (elite ? 2 : 1));
+    // a boss climbs less than his floor: the whole act has already made him twice the man the last one was,
+    // and the hero cannot be expected to outgrow the crypt on his first run.
+    // A boss hits for about a third of the hero's HP: the d20 roll decides the fight, not the first two blows.
+    // his HP grows with the act, not with the floor of the act: a boss is a wall, not a mountain
+    const actStartHp = Math.pow(1.45, act * ACT_LEN);
+    const hpB = d.boss ? Math.round(d.hp * actStartHp * (1 + 0.1 * (n - 1 - act * ACT_LEN))) : Math.round(hp * (elite ? 1.6 : 1));
+    const bossDmg = Math.max(4, Math.round((4 + n * 1.6) * (1 + 0.08 * act)));
+    const dmgB = [Math.round(bossDmg * 0.75), Math.round(bossDmg * 1.15)];
     const e = {
-      id: this.uid++, kind: 'enemy', type, x, y, hp, maxHp: hp, ac: d.ac + (elite ? 1 : 0), hit: d.hit + Math.floor(act * 0.5) + (within >= 2 ? 1 : 0) + (elite ? 1 : 0),
-      dmg: [Math.round(d.dmg[0] * dmgK) + (elite ? 1 : 0), Math.round(d.dmg[1] * dmgK) + (elite ? 2 : 0)], xp: Math.round(d.xp * k * (elite ? 2 : 1)),
+      id: this.uid++, kind: 'enemy', type, x, y, hp: hpB, maxHp: hpB, ac: d.ac + (elite ? 1 : 0), hit: d.hit + Math.floor(act * 0.5) + (within >= 2 ? 1 : 0) + (elite ? 1 : 0),
+      dmg: d.boss ? dmgB : [Math.round(d.dmg[0] * dmgK) + (elite ? 1 : 0), Math.round(d.dmg[1] * dmgK) + (elite ? 2 : 0)], xp,
       elite, boss: !!d.boss, st: {}, cd: {}, energy: 0, awake: false, seen: -99, touched: false,
     };
     this.enemies.push(e);
@@ -313,9 +451,9 @@ export class Game {
       chest.open = true;
       this.say(t('lChest'), 'loot');
       this.emit({ t: 'fx', k: 'chest', x: nx, y: ny });
-      this.give(this.randomLoot(1), nx, ny);
-      if (chance(0.6)) this.give(this.randomLoot(), nx, ny);
-      this.give({ kind: 'gold', n: rint(8, 16) * this.floor }, nx, ny);
+      this.take(this.randomLoot(1), nx, ny);
+      if (chance(0.6)) this.take(this.randomLoot(), nx, ny);
+      this.take({ kind: 'gold', n: rint(8, 16) * this.floor }, nx, ny);
       return true;
     }
     if (!canStep(m, p.x, p.y, dx, dy)) return false;
@@ -324,7 +462,13 @@ export class Game {
     this.emit({ t: 'step' });
     for (let i = this.items.length - 1; i >= 0; i--) {
       const o = this.items[i];
-      if (o.x === nx && o.y === ny) { this.items.splice(i, 1); this.give(o.it, nx, ny); }
+      if (o.x === nx && o.y === ny) { this.items.splice(i, 1); this.take(o.it, nx, ny); }
+    }
+    const mc = this.merchant;
+    if (mc && !mc.seen && mc.x === nx && mc.y === ny) {
+      mc.seen = true;
+      this.say(t('lMerchant'), 'sys');
+      this.emit({ t: 'shop' });
     }
     const f = this.fountain;
     if (f && !f.used && f.x === nx && f.y === ny) {
@@ -358,19 +502,28 @@ export class Game {
     // a weapon's power is added to the hero's damage, like a spell's own power is
     let n = o.base != null ? o.base : rint(...(isP ? st.dmg.map((x) => x + st.power) : a.dmg));
     n += o.flat || 0;
-    if (isP && F.has('mastery') && o.kind === 'spell') n *= 1.3;
+    if (isP && o.kind === 'spell') n *= st.spell;
+    if (isP && o.kind !== 'spell') n *= st.melee;
+    if (isP && F.has('wrath') && o.kind === 'spell') n *= 1.2;
     if (crit) n *= isP && F.has('assassin') ? 3 : 2;
     n *= o.mult || 1;
     if (isP) n *= this.playerMult(d);
     n = Math.max(1, Math.round(n));
+    if (!isP && p.st.dodge && chance(p.st.dodge / 100)) { this.say(t('lDodge')); return false; }
     if (!isP && F.has('ward') && chance(0.25)) {
       this.say(t('lWard'), 'good'); this.emit({ t: 'fx', k: 'ward', x: p.x, y: p.y }); return false;
     }
     this.say(isP ? t(crit ? 'lYouCrit' : 'lYouHit', this.ename(d), n) : t(crit ? 'lCritYou' : 'lHitYou', this.ename(a), n), isP ? (crit ? 'crit' : '') : 'bad');
     this.damage(d, n, crit, a);
     if (isP && d.hp > 0) {
-      if (p.venom > 0 && o.kind !== 'spell') { p.venom--; this.poison(d, p.talents.B2 ? 4 : 3, p.talents.B2 ? 6 : 4); }
-      else if (this.relic === 'gland' && o.kind !== 'spell') this.poison(d, 2, 3);
+      if (p.venom > 0 && o.kind !== 'spell') { p.venom--; this.poison(d, F.has('toxicity') ? 4 : 3, F.has('toxicity') ? 6 : 4); }
+      else if (this.relic === 'gland' && o.kind !== 'spell') this.poison(d, 1 + this.rl(), 3);
+      else if (this.relic === 'ember' && o.kind !== 'spell' && d.hp > 0) { d.st.burn = Math.max(d.st.burn || 0, 3); d.st.burnDmg = Math.max(d.st.burnDmg || 0, this.rl()); }
+      // Frozen Tear: your hits slow, and from level 3 they freeze
+      if (this.relic === 'tear' && o.kind !== 'spell' && d.hp > 0) {
+        if (this.rl() >= 3) d.st.frozen = Math.max(d.st.frozen || 0, d.boss ? 1 : 2);
+        else d.st.slow = 1;
+      }
     }
     if (isP && st.steal && p.hp > 0) this.heal(st.steal, true);
     if (isP && crit && F.has('packbond') && p.pet) this.heal(3, true);
@@ -388,13 +541,13 @@ export class Game {
   playerMult(d) {
     const p = this.player, st = this.ps(), F = this.flags();
     let k = 1;
-    if (this.relic === 'crown') k *= 1.15;
+    if (this.relic === 'crown') k *= 1 + 0.08 * this.rl();
     if (F.has('rage') && p.hp < st.maxHp / 2) k *= 1.5;
     if (F.has('executioner') && d.hp < d.maxHp * 0.3) k *= 1.6;
     if (F.has('shatter') && (d.st.frozen > 0 || d.st.stun > 0)) k *= 1.6;
     if (F.has('virulence') && d.st.poison > 0) k *= 1.3;
     if (F.has('kindled') && d.st.burn > 0) k *= 1.5;
-    if (this.relic === 'sigil') k *= 1.25;
+    if (this.relic === 'sigil') k *= 1 + 0.12 * this.rl();
     return k;
   }
 
@@ -439,8 +592,8 @@ export class Game {
       if (p.hp <= 0 && F.has('unbreakable') && !p.flags.unbreakable) {
         p.flags.unbreakable = true; p.hp = 1; this.say(t('lUnbreakable'), 'good'); this.emit({ t: 'fx', k: 'ward', x: p.x, y: p.y });
       }
-      if (p.hp <= 0 && this.relic === 'phylactery' && !p.flags.phylactery) {
-        p.flags.phylactery = true; p.hp = Math.round(st.maxHp / 2); this.say(t('lRelic'), 'good'); this.emit({ t: 'fx', k: 'level', x: p.x, y: p.y });
+      if (p.hp <= 0 && this.relic === 'phylactery' && (p.flags.revives || 0) < 1 + Math.floor(this.rl() / 2)) {
+        p.flags.revives = (p.flags.revives || 0) + 1; p.hp = Math.round(st.maxHp / 2); this.say(t('lRelic'), 'good'); this.emit({ t: 'fx', k: 'level', x: p.x, y: p.y });
       }
       if (p.hp > 0 && p.hp < st.maxHp * 0.25 && F.has('secondwind') && !p.flags.secondWind) {
         p.flags.secondWind = true; this.say(t('lSecondWind'), 'good'); this.heal(Math.round(st.maxHp * 0.35), true);
@@ -502,9 +655,11 @@ export class Game {
     }
   }
 
-  learn(id) { // talent: costs a point, needs the tier above in the same branch
-    const p = this.player, tier = Number(id[1]);
-    if (p.points <= 0 || p.talents[id] || (tier > 1 && !p.talents[id[0] + (tier - 1)])) return false;
+  learn(id) { // talent: costs a point, needs the level above in the same branch
+    const p = this.player, lvl = Number(id.slice(1).replace(/[ab]$/, '')), letter = id[0];
+    const branch = TALENTS[p.cls][letter.charCodeAt(0) - 65] || [];
+    const above = lvl === 1 || branch.some((n) => n.id !== id && Number(n.id.slice(1).replace(/[ab]$/, '')) === lvl - 1 && p.talents[n.id]);
+    if (p.points <= 0 || p.talents[id] || !above) return false;
     const before = this.ps().maxHp;
     p.points--; p.talents[id] = 1;
     p.hp += Math.max(0, this.ps().maxHp - before);
@@ -529,8 +684,8 @@ export class Game {
   }
 
   useSkill(id, x, y) {
-    const p = this.player, st = this.ps(), sk = SKILLS[id];
-    if (!this.skills().includes(id) || (p.cds[id] || 0) > 0) return false;
+    const p = this.player, st = this.ps(), sk = SKILLS[id], F = this.flags();
+    if (!this.canCast(id)) { if (this.skills().includes(id) && (p.cds[id] || 0) === 0) this.say(t('lNoMana')); return false; }
     let target = null;
     if (sk.target) {
       target = this.targets(id).find((c) => c.x === x && c.y === y);
@@ -549,7 +704,7 @@ export class Game {
       case 'bash':
         this.emit({ t: 'fx', k: 'bash', x: target.x, y: target.y });
         if (this.strike(p, target, { sure: true, flat: 2 }) && target.hp > 0) {
-          target.st.stun = target.boss ? 1 : p.talents.B2 ? 3 : 2; this.say(t('lStun', this.ename(target)));
+          target.st.stun = target.boss ? 1 : F.has('toxicity') ? 3 : 2; this.say(t('lStun', this.ename(target)));
         }
         break;
       case 'charge': {
@@ -566,11 +721,11 @@ export class Game {
         const hit = (e, k) => {
           if (e.hp <= 0) return;
           this.strike(p, e, { sure: true, kind: 'spell', base: Math.round(n * k) });
-          if (p.talents.A1 && e.hp > 0) { e.st.burn = 3; e.st.burnDmg = 2 + Math.floor(this.floor / 3); }
+          if (F.has('kindling') && e.hp > 0) { e.st.burn = 3; e.st.burnDmg = 2 + Math.floor(this.floor / 3); }
         };
-        const around = p.talents.A3 ? this.enemies.filter((e) => e !== target && dist(e, target) === 1) : [];
+        const around = F.has('inferno') ? this.enemies.filter((e) => e !== target && dist(e, target) === 1) : [];
         hit(target, 1);
-        if (p.talents.A3) { this.emit({ t: 'fx', k: 'explode', x: target.x, y: target.y }); for (const e of around) hit(e, 0.5); }
+        if (F.has('inferno')) { this.emit({ t: 'fx', k: 'explode', x: target.x, y: target.y }); for (const e of around) hit(e, 0.5); }
         break;
       }
       case 'nova': {
@@ -604,12 +759,12 @@ export class Game {
         break;
       // ---------- cleric ----------
       case 'smite': {
-        const list = p.talents.B3 ? adjacent() : [target];
+        const list = F.has('shatter') ? adjacent() : [target];
         if (!list.length) { this.say(t('lNoTarget')); return false; }
         this.emit({ t: 'fx', k: 'cleave', x: p.x, y: p.y });
         for (const e of list) {
           const holy = ENEMIES[e.type].undead ? 2 : 1;
-          const mult = (p.talents.B4 ? 1.3 : 1) * holy;
+          const mult = (F.has('deepfreeze') ? 1.3 : 1) * holy;
           this.strike(p, e, { sure: true, kind: 'spell', base: Math.round((rint(3, 7) + p.lvl + st.power + 4) * mult) });
         }
         break;
@@ -622,7 +777,7 @@ export class Game {
         break;
       }
       case 'sanctuary':
-        p.st.sanctuary = p.talents.C4 ? 6 : 4;
+        p.st.sanctuary = F.has('mastery') ? 6 : 4;
         this.say(t('lSanctuary'), 'good'); this.emit({ t: 'fx', k: 'ward', x: p.x, y: p.y });
         break;
       // ---------- paladin ----------
@@ -633,16 +788,16 @@ export class Game {
         const cells = [target, ...this.enemies.filter((e) => !e.ally && e !== target && dist(e, p) === 1)];
         this.emit({ t: 'fx', k: 'cleave', x: p.x, y: p.y });
         for (const e of cells) {
-          if (this.strike(p, e, { sure: true, flat: p.talents.B4 ? 6 : 3 }) && e.hp > 0) {
-            e.st.stun = e.boss ? 1 : (p.talents.B2 ? 2 : 1);
+          if (this.strike(p, e, { sure: true, flat: F.has('deepfreeze') ? 6 : 3 }) && e.hp > 0) {
+            e.st.stun = e.boss ? 1 : (F.has('toxicity') ? 2 : 1);
             this.say(t('lStun', this.ename(e)));
           }
         }
         break;
       }
       case 'consecrate':
-        p.st.consecrate = p.talents.C2 ? 6 : 4;
-        p.st.consecrateDmg = Math.round((4 + p.lvl) * (p.talents.C2 ? 1.5 : 1));
+        p.st.consecrate = F.has('shelter') ? 6 : 4;
+        p.st.consecrateDmg = Math.round((4 + p.lvl) * (F.has('shelter') ? 1.5 : 1));
         this.say(t('lConsecrate'), 'good'); this.emit({ t: 'fx', k: 'nova', x: p.x, y: p.y });
         break;
       // ---------- hunter ----------
@@ -658,22 +813,91 @@ export class Game {
       case 'snare':
         this.emit({ t: 'shot', a: p.id, d: target.id, k: 'web', x0: p.x, y0: p.y, x1: target.x, y1: target.y });
         target.st.web = target.boss ? 1 : 3;
-        this.poison(target, p.talents.B2 ? 4 : 3, p.talents.B2 ? 6 : 4);
+        this.poison(target, F.has('toxicity') ? 4 : 3, F.has('toxicity') ? 6 : 4);
         this.say(t('lSnare', this.ename(target)), 'good');
         break;
       case 'beast': {
-        if (this.pet) { this.say(t('lNoTarget')); return false; }
+        if (this.pets().length >= (this.skills().includes('pack') ? 2 : 1)) { this.say(t('lNoTarget')); return false; }
         const spot = this.freeNear(p.x, p.y, 2)[0];
         if (!spot) { this.say(t('lNoTarget')); return false; }
-        this.pet = this.spawn('wolf', spot.x, spot.y, false, 0);
-        this.pet.ally = true; this.pet.awake = true; this.pet.seen = this.turn;
-        this.tunePet();
-        this.emit({ t: 'fx', k: 'summon', x: spot.x, y: spot.y });
-        this.say(t('lBeast'), 'good');
+        this.summonWolf(spot);
         break;
       }
+      case 'pack': {
+        if (this.pets().length >= 2) { this.say(t('lNoTarget')); return false; }
+        const spot = this.freeNear(p.x, p.y, 2)[0];
+        if (!spot) { this.say(t('lNoTarget')); return false; }
+        this.summonWolf(spot);
+        break;
+      }
+      case 'whirlwind': {
+        const list = this.enemies.filter((e) => !e.ally && e.awake && dist(e, p) === 1);
+        if (!list.length) { this.say(t('lNoTarget')); return false; }
+        this.emit({ t: 'fx', k: 'nova', x: p.x, y: p.y });
+        for (const e of list) this.strike(p, e);
+        this.say(t('lWhirl'), 'good');
+        break;
+      }
+      case 'warcry':
+        p.st.rage = Math.max(p.st.rage || 0, 4); p.st.cry = 4;
+        this.emit({ t: 'fx', k: 'level', x: p.x, y: p.y });
+        this.say(t('lWarcry'), 'good');
+        break;
+      case 'meteor': {
+        this.emit({ t: 'fx', k: 'explode', x: target.x, y: target.y });
+        const base = rint(18, 28) + Math.round(p.lvl * 1.5);
+        for (const e of this.enemies.filter((e) => !e.ally && dist(e, target) <= 1)) {
+          this.strike(p, e, { sure: true, kind: 'spell', base });
+          if (e.hp > 0) { e.st.burn = 3; e.st.burnDmg = 3 + Math.floor(this.floor / 3); }
+        }
+        this.say(t('lMeteor'), 'good');
+        break;
+      }
+      case 'blizzard': {
+        const list = this.visibleEnemies();
+        if (!list.length) { this.say(t('lNoTarget')); return false; }
+        for (const e of list) {
+          e.st.frozen = Math.max(e.st.frozen || 0, e.boss ? 1 : 2);
+          this.strike(p, e, { sure: true, kind: 'spell', base: rint(6, 10) + Math.round(p.lvl) });
+          this.emit({ t: 'fx', k: 'nova', x: e.x, y: e.y });
+        }
+        this.say(t('lBlizzard'), 'good');
+        break;
+      }
+      case 'miasma': {
+        this.hazards.push({ x: target.x, y: target.y, kind: 'miasma', turns: 4, dmg: 2 + Math.floor(p.lvl / 2) });
+        this.emit({ t: 'fx', k: 'smoke', x: target.x, y: target.y });
+        this.say(t('lMiasma'), 'good');
+        break;
+      }
+      case 'radiance': {
+        this.heal(Math.round(st.maxHp * 0.2));
+        for (const e of this.enemies.filter((e) => !e.ally && dist(e, p) === 1)) {
+          this.strike(p, e, { sure: true, kind: 'spell', base: rint(8, 12) + p.lvl });
+          if (e.hp > 0) { e.st.burn = 2; e.st.burnDmg = 2 + Math.floor(this.floor / 3); }
+        }
+        this.emit({ t: 'fx', k: 'level', x: p.x, y: p.y });
+        this.say(t('lRadiance'), 'good');
+        break;
+      }
+      case 'rain': {
+        const list = this.visibleEnemies();
+        if (!list.length) { this.say(t('lNoTarget')); return false; }
+        for (const e of list) for (let i = 0; i < 2; i++) {
+          this.emit({ t: 'shot', a: p.id, d: e.id, k: 'arrow', x0: p.x, y0: p.y, x1: e.x, y1: e.y });
+          this.strike(p, e, { flat: 3 });
+        }
+        this.say(t('lRain'), 'good');
+        break;
+      }
+      case 'beartrap':
+        this.hazards.push({ x: target.x, y: target.y, kind: 'trap', dmg: rint(10, 16) + Math.floor(p.lvl * 1.5), hold: 2, owner: 'player' });
+        this.emit({ t: 'fx', k: 'chest', x: target.x, y: target.y });
+        this.say(t('lBeartrap'), 'good');
+        break;
     }
-    p.cds[id] = this.skillCd(id);
+    p.mp -= this.skillCost(id);
+    p.cds[id] = SKILLS[id].cd;
     this.usedSkill = id;
     this.emit({ t: 'skill', id });
     return true;
@@ -685,34 +909,97 @@ export class Game {
     const it = p.bag[i];
     if (it.slot !== 'use') return false;
     const st = this.ps();
-    if (it.kind === 'heal') {
-      if (p.hp >= st.maxHp && !p.st.poison) return false;
-      this.say(t('lDrink'));
-      this.heal(Math.max(15, Math.round(st.maxHp / 2)));
-      p.st.poison = 0;
-      this.emit({ t: 'fx', k: 'potion', x: p.x, y: p.y });
-    } else if (it.kind === 'fire') {
-      const list = this.visibleEnemies();
-      if (!list.length) { this.say(t('lNoTarget')); return false; }
-      this.say(t('lScrollFire'), 'good');
-      for (const e of list) {
-        this.emit({ t: 'fx', k: 'explode', x: e.x, y: e.y });
-        this.strike(p, e, { sure: true, kind: 'spell', base: rint(8, 14) + this.floor * 2 });
+    const spend = () => { if ((it.n || 1) > 1) it.n--; else p.bag.splice(i, 1); };
+    switch (it.kind) {
+      case 'heal':
+        if (p.hp >= st.maxHp && !p.st.poison && !p.st.burn) return false;
+        this.say(t('lDrink'));
+        this.heal(Math.max(15, Math.round(st.maxHp / 2)));
+        p.st.poison = 0; p.st.burn = 0;
+        this.emit({ t: 'fx', k: 'potion', x: p.x, y: p.y });
+        break;
+      case 'greatHeal':
+        this.say(t('lDrink'));
+        this.heal(st.maxHp); p.st.poison = 0; p.st.burn = 0;
+        this.emit({ t: 'fx', k: 'potion', x: p.x, y: p.y });
+        break;
+      case 'food':
+        if (p.hp >= st.maxHp && !this.pets().length) return false;
+        this.heal(Math.round(st.maxHp / 4));
+        for (const pet of this.pets()) pet.hp = Math.min(pet.maxHp, pet.hp + Math.round(pet.maxHp / 3));
+        break;
+      case 'mana':
+        if (p.mp >= this.manaPool()) return false;
+        p.mp = Math.min(this.manaPool(), p.mp + Math.ceil(this.manaPool() / 2));
+        this.say(t('lMana'), 'good');
+        this.emit({ t: 'fx', k: 'potion', x: p.x, y: p.y });
+        break;
+      case 'antidote':
+        if (!p.st.poison && !p.st.burn) return false;
+        p.st.poison = 0; p.st.burn = 0; this.say(t('lAntidote'), 'good');
+        break;
+      case 'fire': {
+        const list = this.visibleEnemies();
+        if (!list.length) { this.say(t('lNoTarget')); return false; }
+        this.say(t('lScrollFire'), 'good');
+        for (const e of list) {
+          this.emit({ t: 'fx', k: 'explode', x: e.x, y: e.y });
+          this.strike(p, e, { sure: true, kind: 'spell', base: rint(8, 14) + this.floor * 2 });
+        }
+        break;
       }
-    } else if (it.kind === 'teleport') {
-      const c = pick(this.freeCells(0).filter((c) => dist(c, p) > 10));
-      if (!c) return false;
-      this.emit({ t: 'fx', k: 'blink', x: p.x, y: p.y, x1: c.x, y1: c.y });
-      p.x = c.x; p.y = c.y; this.say(t('lScrollTp'), 'good');
-    } else if (it.kind === 'map') {
-      this.map.seen.fill(1); this.say(t('lScrollMap'), 'good');
-      this.emit({ t: 'fx', k: 'map', x: p.x, y: p.y });
+      case 'frost': {
+        const list = this.visibleEnemies();
+        if (!list.length) { this.say(t('lNoTarget')); return false; }
+        for (const e of list) { e.st.frozen = e.boss ? 1 : 2; this.emit({ t: 'fx', k: 'nova', x: e.x, y: e.y }); }
+        this.say(t('lScrollFrost'), 'good');
+        break;
+      }
+      case 'lightning': {
+        const e = this.visibleEnemies().sort((a, b) => dist(a, p) - dist(b, p))[0];
+        if (!e) { this.say(t('lNoTarget')); return false; }
+        this.emit({ t: 'shot', a: p.id, d: e.id, k: 'zap', x0: p.x, y0: p.y, x1: e.x, y1: e.y });
+        this.strike(p, e, { sure: true, kind: 'spell', base: rint(16, 26) + this.floor * 3 });
+        this.say(t('lScrollBolt'), 'good');
+        break;
+      }
+      case 'teleport': {
+        const c = pick(this.freeCells(0).filter((c) => dist(c, p) > 10));
+        if (!c) return false;
+        this.emit({ t: 'fx', k: 'blink', x: p.x, y: p.y, x1: c.x, y1: c.y });
+        p.x = c.x; p.y = c.y; this.say(t('lScrollTp'), 'good');
+        break;
+      }
+      case 'map':
+        this.map.seen.fill(1); this.say(t('lScrollMap'), 'good');
+        this.emit({ t: 'fx', k: 'map', x: p.x, y: p.y });
+        break;
+      case 'identify':
+        this.map.seen.fill(1);
+        for (const e of this.enemies) if (!e.ally) { this.vis[e.y * this.map.w + e.x] = 1; e.seen = this.turn; }
+        this.say(t('lScrollSight'), 'good');
+        break;
+      case 'ward':
+        p.st.shield = (p.st.shield || 0) + Math.round(20 * st.shieldMax);
+        this.say(t('lScrollWard'), 'good');
+        break;
+      case 'rage':
+        p.st.rage = 6; this.say(t('lRage'), 'good');
+        break;
+      case 'stoneskin':
+        p.st.stoneskin = 8; this.say(t('lStoneskin'), 'good');
+        break;
+      case 'smoke':
+        p.st.invis = 3; this.say(t('lInvis'), 'good');
+        this.emit({ t: 'fx', k: 'smoke', x: p.x, y: p.y });
+        break;
+      default: return false;
     }
-    p.bag.splice(i, 1);
+    spend();
     return true;
   }
 
-  quickPotion() { const it = this.player.bag.find((x) => x.kind === 'heal'); return it ? this.act({ type: 'use', uid: it.uid }) : false; }
+  quickPotion() { const it = this.player.bag.find((x) => x.kind === 'heal' || x.kind === 'greatHeal'); return it ? this.act({ type: 'use', uid: it.uid }) : false; }
 
   // equipping and dropping are free actions
   equip(uid) {
@@ -739,6 +1026,7 @@ export class Game {
   endTurn() {
     const p = this.player, st = this.ps();
     for (const k of Object.keys(p.cds)) if (p.cds[k] > 0 && k !== this.usedSkill) p.cds[k]--;
+    p.mp = Math.min(this.manaPool(), p.mp + this.manaRegen());
     if (p.st.poison > 0) {
       p.st.poison--;
       const n = p.st.poisonDmg || 2;
@@ -782,6 +1070,8 @@ export class Game {
       }
       if (e.hp <= 0) continue;
       if (e.st.frozen > 0) { e.st.frozen--; continue; }
+      if (e.st.slow > 0) { e.st.slow = 0; e.st.slowNext = 1; continue; }
+      if (e.st.slowNext) { e.st.slowNext = 0; e.st.slow = 1; continue; }
       if (e.st.stun > 0) { e.st.stun--; continue; }
       if (e.ally) { if (e.st.web > 0) { e.st.web--; continue; } this.petAct(e, dm); continue; }
       e.energy += ENEMIES[e.type].speed || 1;
@@ -819,13 +1109,29 @@ export class Game {
   }
 
   // the wolf keeps up with the hero: its numbers come from his level, and the Companion talent
+  // the wolf (or two, with Wolf Pack): summoned next to the hero and kept in this.pets
+  pets() { return this.enemies.filter((e) => e.ally); }
+  summonWolf(spot) {
+    const e = this.spawn('wolf', spot.x, spot.y, false, 0);
+    e.ally = true; e.awake = true; e.seen = this.turn;
+    this.pet = e;
+    this.tunePet();
+    this.emit({ t: 'fx', k: 'summon', x: spot.x, y: spot.y });
+    this.say(t('lBeast'), 'good');
+    return e;
+  }
+
   tunePet() {
-    const e = this.pet, p = this.player;
-    if (!e) return;
-    const c = p.talents.C2 ? 1.35 : 1;
+    const p = this.player, F = this.flags();
+    for (const e of this.pets()) this.tuneWolf(e, F);
+  }
+
+  tuneWolf(e, F = this.flags()) {
+    const p = this.player;
+    const c = (F.has('shelter') ? 1.35 : 1) * (F.has('packbond') ? 1.2 : 1);
     e.maxHp = Math.round((14 + p.lvl * 4) * c);
     e.hp = Math.min(e.hp > 1 ? e.hp : e.maxHp, e.maxHp);
-    e.hit = 4 + Math.floor(p.lvl / 2) + (p.talents.C2 ? 2 : 0);
+    e.hit = 4 + Math.floor(p.lvl / 2) + (F.has('shelter') ? 2 : 0);
     e.dmg = [Math.round((3 + p.lvl * 0.6) * c), Math.round((6 + p.lvl * 1.1) * c)];
     e.ac = 12 + Math.floor(p.lvl / 3);
   }
@@ -978,8 +1284,24 @@ export class Game {
 
   hazardPhase() {
     const p = this.player;
+    // traps the player laid and clouds he raised: they never go off by themselves, they wait for a foot
+    for (const h of this.hazards) {
+      if (h.kind === 'trap') for (const e of this.enemies) {
+        if (e.ally || e.hp <= 0 || e.x !== h.x || e.y !== h.y) continue;
+        this.emit({ t: 'fx', k: 'blast', x: h.x, y: h.y, kind: 'trap' });
+        this.damage(e, h.dmg, false, p);
+        e.st.stun = Math.max(e.st.stun || 0, h.hold);
+        h.done = true;
+      }
+      if (h.kind === 'miasma') {
+        for (const e of this.enemies) if (!e.ally && e.hp > 0 && dist(e, h) <= 1) this.poison(e, h.dmg, 3);
+        h.turns--;
+        if (h.turns <= 0) h.done = true;
+      }
+    }
+    this.hazards = this.hazards.filter((h) => !h.done);
     const now = this.hazards.filter((h) => h.at <= this.turn);
-    this.hazards = this.hazards.filter((h) => h.at > this.turn);
+    this.hazards = this.hazards.filter((h) => h.at > this.turn || h.kind === 'trap' || h.kind === 'miasma');
     const hitP = now.find((h) => h.x === p.x && h.y === p.y);
     for (const h of now) this.emit({ t: 'fx', k: 'blast', x: h.x, y: h.y, kind: h.kind });
     if (now.length) this.emit({ t: 'shake', p: 5 });

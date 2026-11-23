@@ -1,5 +1,8 @@
 // Sanctuary progress and the run in progress, kept in localStorage; merged with the cloud copy after sign-in.
-import { RELICS } from './data.js';
+import { RELICS, RELIC_MAX } from './data.js';
+
+// the boss that unlocks each relic, without the duplicates: some bosses guard two
+const RELIC_OWNERS = Object.fromEntries(Object.entries(RELICS).map(([id, r]) => [id, r.boss]));
 
 const KEY = 'd101_meta', RUN = 'd101_run';
 export const blankMeta = () => ({ v: 1, embers: 0, earned: 0, upgrades: {}, relics: {}, vault: null, stats: { runs: 0, wins: 0, best: 0, kills: 0, bestScore: 0 }, history: [], name: '', at: 0 });
@@ -29,7 +32,12 @@ export function finishRun(meta, g) {
   s.runs++; if (win) s.wins++;
   s.best = Math.max(s.best, g.floor); s.kills += g.stats.kills; s.bestScore = Math.max(s.bestScore, score);
   const newRelics = [];
-  for (const [id, r] of Object.entries(RELICS)) if (g.stats.bosses.includes(r.boss) && !meta.relics[id]) { meta.relics[id] = 1; newRelics.push(id); }
+  // a relic you carry levels up when you kill a boss, up to five; a new one starts at level 1
+  for (const [id, r] of Object.entries(RELIC_OWNERS)) if (g.stats.bosses.includes(r) && !meta.relics[id]) { meta.relics[id] = 1; newRelics.push(id); }
+  if (g.relic && g.stats.bosses.some((b) => RELIC_OWNERS[g.relic] === b) && (meta.relics[g.relic] || 0) < RELIC_MAX) {
+    meta.relics[g.relic] = (meta.relics[g.relic] || 1) + 1;
+    newRelics.push(g.relic);
+  }
   if (meta.upgrades.heirloom) { const it = g.bestItem(); if (it) meta.vault = { ...it }; }
   meta.history.unshift({ name: g.player.name, cls: g.player.cls, floor: g.floor, score, win, at: Date.now() });
   meta.history = meta.history.slice(0, 12);

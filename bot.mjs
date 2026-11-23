@@ -2,7 +2,14 @@
 import { Game, itemScore } from './js/game.js';
 import { CLASSES, TALENTS, SKILLS } from './js/data.js';
 import { distanceMap, walkable, canStep, DIRS, dist } from './js/dungeon.js';
-const order = ['B1', 'C1', 'A1', 'B2', 'A2', 'C2', 'B3', 'A3', 'C3', 'B4', 'A4', 'C4'];
+// what the bot buys, in order: one branch down to the bottom, then the next. The ids of the five branches
+// are the same in every class (A..E), so this works for all six.
+const order = [];
+for (const letter of 'ABCDE') for (let lvl = 1; lvl <= 10; lvl++) {
+  const branch = TALENTS.warrior[letter.charCodeAt(0) - 65];
+  const row = branch.filter((n) => Number(n.id.slice(1).replace(/[ab]$/, '')) === lvl);
+  for (const n of row) order.push(n.id);
+}
 const dropped = new WeakSet();
 export function botTurn(g) {
   const p = g.player, m = g.map, st = g.ps();
@@ -10,6 +17,12 @@ export function botTurn(g) {
   for (const it of [...p.bag]) if (it.slot !== 'use' && itemScore(it) > itemScore(p.equip[it.slot])) g.equip(it.uid);
   for (const it of p.bag.filter((x) => x.slot !== 'use').sort((a, b) => itemScore(a) - itemScore(b)).slice(0, Math.max(0, p.bag.length - 12))) { dropped.add(it); g.drop(it.uid); }
   if (p.hp < st.maxHp * 0.4 && p.bag.some((x) => x.kind === 'heal')) return g.quickPotion();
+  if (p.mp < g.manaPool() * 0.3 && p.bag.some((x) => x.kind === 'mana')) { const it = p.bag.find((x) => x.kind === 'mana'); if (g.act({ type: 'use', uid: it.uid })) return true; }
+  // at a merchant he sells the worst gear and buys what he can pay for
+  if (g.merchant) {
+    for (const row of g.shop().sell) if (row.it.slot !== 'use' && itemScore(row.it) <= itemScore(p.equip[row.it.slot])) g.sell(row.it.uid);
+    for (const row of g.shop().stock) if (!row.sold && row.it.slot !== 'use' && p.gold >= row.price && itemScore(row.it) > itemScore(p.equip[row.it.slot])) g.buy(row.i);
+  }
   if (g.onStairs()) return g.act({ type: 'descend' });
   const foes = g.visibleEnemies().sort((a, b) => dist(a, p) - dist(b, p));
   if (g.hazards.some((h) => h.x === p.x && h.y === p.y)) {

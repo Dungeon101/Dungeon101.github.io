@@ -1,5 +1,5 @@
 // Screens, HUD, overlays and input. Wires the rules (game.js) to the renderer and to saving.
-import { CLASSES, SKILLS, TALENTS, ENEMIES, RARITIES, UPGRADES, RELICS, CONSUMABLES, SLOT_ICON, HERO_NAMES, actOf, isBossFloor, FLOORS } from './data.js';
+import { CLASSES, SKILLS, TALENTS, BRANCHES, ENEMIES, RELIC_MAX, RARITIES, UPGRADES, RELICS, CONSUMABLES, SLOT_ICON, HERO_NAMES, actOf, isBossFloor, FLOORS } from './data.js';
 import { Game, itemName, itemLines, itemScore, xpNext } from './game.js';
 import { Renderer } from './render.js';
 import { path as findPath, walkable, DIRS, dist } from './dungeon.js';
@@ -18,7 +18,7 @@ const write = (k, v) => { try { localStorage.setItem(k, v); } catch { /* not rem
 let meta = loadMeta();
 let g = null, R = null, screen = 'title', overlay = null;
 let targeting = null, walk = null, focusId = null, held = null, endShown = false;
-const TALENT_ICONS = Object.fromEntries(Object.entries(CLASSES).map(([id, c]) => [id, c.talentIcons]));
+const BRANCH_ICONS = Object.fromEntries(Object.entries(BRANCHES).map(([id, bs]) => [id, bs.map((b) => b.icon)]));
 // every picture the renderer may need; a file that is missing falls back to a plain token
 const ART = [...new Set([
   ...Object.values(CLASSES).map((c) => c.art),
@@ -83,7 +83,7 @@ function renderSelect() {
     </div>
     ${relics.length ? `<div class="pickrow"><span>${t('relic')}</span>
       <button class="chip ${!pick.relic ? 'sel' : ''}" data-relic="">${t('noRelic')}</button>
-      ${relics.map(([id, r]) => `<button class="chip ${pick.relic === id ? 'sel' : ''}" data-relic="${id}" title="${esc(L(r.desc))}">${icon(r.icon)} ${L(r.name)}</button>`).join('')}</div>` : ''}
+      ${relics.map(([id, r]) => `<button class="chip ${pick.relic === id ? 'sel' : ''}" data-relic="${id}" title="${esc(L(r.desc))}">${icon(r.icon)} ${L(r.name)} <em class="lv">${'★'.repeat(meta.relics[id] || 1)}</em></button>`).join('')}</div>` : ''}
     ${vault ? `<div class="pickrow"><span>${t('heirloom')}</span>
       <button class="chip ${pick.heir ? 'sel' : ''}" data-heir="1" style="color:${RARITIES[vault.rarity].color}">${icon(SLOT_ICON[vault.slot])} ${esc(itemName(vault))}</button>
       <button class="chip ${!pick.heir ? 'sel' : ''}" data-heir="">${t('noHeirloom')}</button></div>` : ''}
@@ -101,11 +101,14 @@ function renderSanctuary() {
       return `<div class="card up ${max ? 'max' : ''}">
         <div class="ic">${icon(u.icon)}</div>
         <div><h3>${L(u.name)}</h3><p>${L(u.desc)}</p><div class="pips">${Array.from({ length: u.max }, (_, i) => `<i class="${i < lvl ? 'on' : ''}"></i>`).join('')}</div></div>
-        <button class="btn small ${!max && meta.embers >= cost ? 'gold' : ''}" data-buy="${u.id}" ${max || meta.embers < cost ? 'disabled' : ''}>${max ? t('maxed') : `${icon('flame')} ${cost}`}</button>
+        <button class="btn small ${!max && meta.embers >= cost ? 'gold' : ''}" data-buyup="${u.id}" ${max || meta.embers < cost ? 'disabled' : ''}>${max ? t('maxed') : `${icon('flame')} ${cost}`}</button>
       </div>`;
     }).join('')}</div>
     <h3 class="sub">${t('relics')}</h3>
-    <div class="relics">${Object.entries(RELICS).map(([id, r]) => `<div class="card relic ${meta.relics[id] ? 'on' : ''}">${icon(meta.relics[id] ? r.icon : 'lock')}<div><b>${L(r.name)}</b><small>${meta.relics[id] ? L(r.desc) : t('relicLocked', L(ENEMIES[r.boss].name))}</small></div></div>`).join('')}</div>
+    <div class="relics">${Object.entries(RELICS).map(([id, r]) => {
+      const lv = meta.relics[id] || 0;
+      return `<div class="card relic ${lv ? 'on' : ''}">${icon(lv ? r.icon : 'lock')}<div><b>${L(r.name)}${lv ? ` <em class="stars">${'★'.repeat(lv)}${'☆'.repeat(RELIC_MAX - lv)}</em>` : ''}</b><small>${lv ? L(r.desc) : t('relicLocked', L(ENEMIES[r.boss].name))}</small>${lv && lv < RELIC_MAX ? `<small class="muted">${t('relicNext', lv + 1, L(r.per))}</small>` : ''}</div></div>`;
+    }).join('')}</div>
     <h3 class="sub">${t('lifetime')}</h3>
     <div class="lifetime"><span><b>${s.runs}</b>${t('runs')}</span><span><b>${s.best}</b>${t('bestFloor')}</span><span><b>${s.wins}</b>${t('wins')}</span><span><b>${s.kills}</b>${t('totalKills')}</span></div>
     <div class="actions"><button class="btn" data-go="title">${icon('x')}<span>${t('back')}</span></button><button class="btn gold" data-go="new">${icon('swords')}<span>${t('newRun')}</span></button></div>`;
@@ -142,7 +145,7 @@ function newRun() {
   const heirloom = pick.heir && meta.vault ? meta.vault : null;
   if (heirloom) meta.vault = null;
   saveMeta(meta); pushMeta();
-  const run = Game.create({ cls: pick.cls, name, relic: pick.relic, heirloom, meta });
+  const run = Game.create({ cls: pick.cls, name, relic: pick.relic, relicLvl: pick.relic ? meta.relics[pick.relic] || 1 : 1, heirloom, meta });
   if (CLASSES[pick.cls].skills.includes('beast')) run.useSkill('beast'); // the hunter's wolf is there from the first turn
   run.ev.length = 0;
   startRun(run);
@@ -173,6 +176,7 @@ function after() {
   else R.play(ev);
   for (const e of ev) {
     if (e.t === 'boss') bossIntro(e.id);
+    if (e.t === 'shop') setTimeout(() => { if (!g.over && !overlay) shop(); }, 260);
     if (e.t === 'level') toast(`${t('levelUp', e.lvl)} <small>${t('talentPoint')}</small>`, 'gold');
     if ((e.t === 'atk' || e.t === 'shot') && (e.a === g.player.id ? e.d : e.a) !== g.player.id) focusId = e.a === g.player.id ? e.d : e.a;
     if (e.t === 'fx' && e.k === 'pickup' && e.it.slot !== 'use') toast(`${icon(SLOT_ICON[e.it.slot])} <span style="color:${RARITIES[e.it.rarity].color}">${esc(t('newItem', itemName(e.it)))}</span>`);
@@ -215,6 +219,7 @@ function useSkill(id) {
   const sk = SKILLS[id];
   if (!g.skills().includes(id)) return;
   if ((g.player.cds[id] || 0) > 0) { pulse(`[data-skill="${id}"]`); return; }
+  if (g.player.mp < g.skillCost(id)) { g.say(t('lNoMana')); hud(); pulse(`[data-skill="${id}"]`); return; }
   if (!sk.target) { act({ type: 'skill', id }); return; }
   if (targeting && targeting.id === id) { confirmTarget(); return; }
   const list = g.targets(id);
@@ -284,6 +289,8 @@ function hud() {
   $('#hero .lvl').textContent = t('level', p.lvl);
   setBar('#hp', p.hp, st.maxHp, `${p.hp} / ${st.maxHp}`);
   setBar('#xp', p.xp, xpNext(p.lvl), '');
+  setBar('#mp', p.mp, g.manaPool(), `${p.mp} / ${g.manaPool()}`);
+  $('#mp').classList.toggle('low', p.mp < g.manaRegen());
   const sts = [];
   if (p.st.poison > 0) sts.push(['droplet', '#8cf05a', p.st.poison]);
   if (p.st.stun > 0) sts.push(['zap', '#ffe46b', p.st.stun]);
@@ -296,9 +303,9 @@ function hud() {
   // skills
   const known = g.skills();
   $('#skills').innerHTML = c.skills.map((id, i) => {
-    const sk = SKILLS[id], k = known.includes(id), cd = p.cds[id] || 0;
-    return `<button class="act ${!k ? 'locked' : ''} ${cd ? 'cd' : ''} ${targeting?.id === id ? 'aim' : ''}" data-skill="${id}" ${!k ? 'disabled' : ''} title="${esc(L(sk.name) + ' · ' + L(sk.desc))}">
-      ${icon(k ? sk.icon : 'lock')}<kbd>${i + 1}</kbd>${cd ? `<em>${cd}</em>` : ''}<span>${L(sk.name)}</span></button>`;
+    const sk = SKILLS[id], k = known.includes(id), cd = p.cds[id] || 0, cost = g.skillCost(id), poor = k && !cd && p.mp < cost;
+    return `<button class="act ${!k ? 'locked' : ''} ${cd || poor ? 'cd' : ''} ${targeting?.id === id ? 'aim' : ''}" data-skill="${id}" ${!k ? 'disabled' : ''} title="${esc(L(sk.name) + ' · ' + L(sk.desc))}">
+      ${icon(k ? sk.icon : 'lock')}<kbd>${i + 1}</kbd>${cd ? `<em>${cd}</em>` : `<em class="cost ${poor ? 'poor' : ''}">${cost}</em>`}<span>${L(sk.name)}</span></button>`;
   }).join('') + `
     <button class="act potion" data-go="potion" title="${esc(L(CONSUMABLES.heal.name))}">${icon('flask-conical')}<kbd>4</kbd><em class="n">${p.bag.filter((x) => x.kind === 'heal').length}</em><span>${t('potion')}</span></button>
     <button class="act" data-go="wait" title="${t('wait')}">${icon('hourglass')}<kbd>5</kbd><span>${t('wait')}</span></button>
@@ -361,6 +368,7 @@ function closeOverlay() {
 }
 
 let invSel = null;
+// the bag: stacks show their count, gear shows a green corner when it beats what you wear
 function inventory() {
   const p = g.player, st = g.ps();
   const slot = (s) => {
@@ -374,9 +382,10 @@ function inventory() {
     const isEq = Object.values(p.equip).includes(sel), use = sel.slot === 'use';
     const cur = !use && !isEq ? p.equip[sel.slot] : null;
     const color = use ? CONSUMABLES[sel.kind].color : RARITIES[sel.rarity].color;
+    const diff = cur ? itemScore(sel) - itemScore(cur) : 0;
     detail = `<div class="detail" style="--r:${color}">
-      <h3>${icon(use ? CONSUMABLES[sel.kind].icon : SLOT_ICON[sel.slot])} ${esc(itemName(sel))}</h3>
-      <small>${use ? '' : `${L(RARITIES[sel.rarity].name)} · ${t(sel.slot)} · T${sel.tier}`}</small>
+      <h3>${icon(use ? CONSUMABLES[sel.kind].icon : SLOT_ICON[sel.slot])} ${esc(itemName(sel))}${use && (sel.n || 1) > 1 ? ` <em class="x">×${sel.n}</em>` : ''}</h3>
+      <small>${use ? '' : `${L(RARITIES[sel.rarity].name)} · ${t(sel.slot)} · T${sel.tier}${cur ? ` · <b class="${diff >= 0 ? 'good' : 'bad'}">${diff >= 0 ? '+' : ''}${diff}</b>` : ''}`}</small>
       <ul>${itemLines(sel).map((l) => `<li>${esc(l)}</li>`).join('')}</ul>
       ${cur ? `<p class="muted">${t('equipped')}: ${esc(itemName(cur))}</p><ul class="cmp">${itemLines(cur).map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}
       <div class="actions">
@@ -386,36 +395,66 @@ function inventory() {
   }
   openOverlay('inv', `
     <h2>${icon('backpack')} ${t('inventory')}</h2>
-    <div class="stats"><span>${icon('heart')} ${p.hp}/${st.maxHp}</span><span>${icon('shield')} ${st.ac}</span><span>${icon('target')} +${st.hit}</span><span>${icon('sword')} ${st.dmg[0] + st.power}-${st.dmg[1] + st.power}</span><span>${icon('eye')} ${st.light}</span></div>
+    <div class="stats"><span>${icon('heart')} ${p.hp}/${st.maxHp}</span><span>${icon('droplet')} ${p.mp}/${g.manaPool()}</span><span>${icon('shield')} ${st.ac}</span><span>${icon('target')} +${st.hit}</span><span>${icon('sword')} ${st.dmg[0] + st.power}-${st.dmg[1] + st.power}</span><span>${icon('coins')} ${p.gold}</span></div>
+    <div class="pane"><div class="left">
     <h4>${t('equipped')}</h4><div class="slots">${['weapon', 'armor', 'trinket'].map(slot).join('')}</div>
     <h4>${t('bag')} <small>${p.bag.length}/16</small></h4>
     <div class="bag">${p.bag.map((it) => {
       const use = it.slot === 'use', col = use ? CONSUMABLES[it.kind].color : RARITIES[it.rarity].color;
       const better = !use && itemScore(it) > itemScore(p.equip[it.slot]);
-      return `<button class="cell ${invSel === it.uid ? 'sel' : ''}" data-item="${it.uid}" style="--r:${col}" title="${esc(itemName(it))}">${icon(use ? CONSUMABLES[it.kind].icon : SLOT_ICON[it.slot])}${better ? '<i class="up"></i>' : ''}</button>`;
+      const n = it.n || 1;
+      return `<button class="cell ${invSel === it.uid ? 'sel' : ''}" data-item="${it.uid}" style="--r:${col}" title="${esc(itemName(it))}">${icon(use ? CONSUMABLES[it.kind].icon : SLOT_ICON[it.slot])}${n > 1 ? `<em class="n">${n}</em>` : ''}${better ? '<i class="up"></i>' : ''}</button>`;
     }).join('')}${Array.from({ length: Math.max(0, 16 - p.bag.length) }, () => '<span class="cell empty"></span>').join('')}</div>
-    ${detail}`);
+    </div><div class="right">${detail || `<p class="hint">${icon('hand-pointer')} ${t('invHint')}</p>`}</div></div>`);
+}
+
+// the merchant: his stock on the left, what he pays for your things on the right
+function shop() {
+  const p = g.player, sh = g.shop();
+  const line = (it, price, act) => {
+    const use = it.slot === 'use', col = use ? CONSUMABLES[it.kind].color : RARITIES[it.rarity].color;
+    return `<button class="trade" ${act} style="--r:${col}">${icon(use ? CONSUMABLES[it.kind].icon : SLOT_ICON[it.slot])}
+      <span>${esc(itemName(it))}${(it.n || 1) > 1 ? ` ×${it.n}` : ''}<small>${use ? '' : L(RARITIES[it.rarity].name)}</small></span>
+      <b>${icon('coins')}${price}</b></button>`;
+  };
+  openOverlay('shop', `
+    <h2>${icon('store')} ${t('merchant')}</h2>
+    <p class="muted">${t('lMerchant')} · ${icon('coins')} <b class="gold">${p.gold}</b></p>
+    <div class="shop">
+      <div><h4>${t('lBuy')}</h4><div class="trades">${sh.stock.filter((x) => !x.sold).map((x) => line(x.it, x.price, `data-buy="${x.i}" ${x.can ? '' : 'disabled'}`)).join('') || `<p class="muted">${t('lMerchantLeft')}</p>`}</div></div>
+      <div><h4>${t('lSell')}</h4><div class="trades">${sh.sell.map((x) => line(x.it, x.price, `data-sell="${x.it.uid}"`)).join('') || `<p class="muted">${t('lNothingToSell')}</p>`}</div></div>
+    </div>
+    <div class="actions"><button class="btn small" data-close="1">${t('back')}</button></div>`);
 }
 
 let talSel = null;
 function talents() {
-  const p = g.player, tree = TALENTS[p.cls];
-  const node = (n, b) => {
-    const tier = Number(n.id[1]), has = !!p.talents[n.id], open = tier === 1 || p.talents[n.id[0] + (tier - 1)];
-    const state = has ? 'has' : open && p.points > 0 ? 'can' : open ? 'open' : 'lock';
-    return `<button class="node ${state} ${talSel === n.id ? 'sel' : ''}" data-tal="${n.id}">${icon(n.skill ? SKILLS[n.skill].icon : TALENT_ICONS[p.cls][b])}<span>${L(n.name)}</span></button>`;
+  const p = g.player, tree = TALENTS[p.cls], names = BRANCHES[p.cls];
+  const lvlOf = (n) => Number(n.id.slice(1).replace(/[ab]$/, ''));
+  const has = (n) => !!p.talents[n.id];
+  // a node is open when the level above in the same branch is bought, or when it is the first level
+  const open = (n) => lvlOf(n) === 1 || tree[n.id.charCodeAt(0) - 65].some((x) => lvlOf(x) === lvlOf(n) - 1 && has(x));
+  const spent = Object.values(p.talents).filter(Boolean).length;
+  const node = (n) => {
+    const state = has(n) ? 'has' : open(n) && p.points > 0 ? 'can' : open(n) ? 'open' : 'lock';
+    const sk = Object.keys(n.eff || {}).find((k) => k.startsWith('skill:'));
+    return `<button class="node ${state} ${talSel === n.id ? 'sel' : ''}" data-tal="${n.id}" title="${esc(L(n.name))}">${icon(sk ? SKILLS[sk.slice(6)].icon : BRANCH_ICONS[p.cls][n.id.charCodeAt(0) - 65])}<span>${L(n.name)}</span></button>`;
   };
   const sel = tree.flat().find((n) => n.id === talSel);
   let detail = '';
   if (sel) {
-    const tier = Number(sel.id[1]), has = p.talents[sel.id], open = tier === 1 || p.talents[sel.id[0] + (tier - 1)];
+    const isOpen = open(sel), hasIt = has(sel);
     detail = `<div class="detail"><h3>${L(sel.name)}</h3><p>${L(sel.desc)}</p>
-      ${sel.skill ? `<p class="muted">${L(SKILLS[sel.skill].desc)} ${t('cd', SKILLS[sel.skill].cd)}</p>` : ''}
-      <div class="actions">${has ? `<span class="muted">${icon('check')} ${t('learned')}</span>` : !open ? `<span class="muted">${icon('lock')} ${t('locked')}</span>` : p.points <= 0 ? `<span class="muted">${t('needPoint')}</span>` : `<button class="btn gold small" data-learn="${sel.id}">${t('learn')}</button>`}</div></div>`;
+      <p class="muted">${L(names[sel.id.charCodeAt(0) - 65].name)} · ${t('talLevel', lvlOf(sel))}</p>
+      <div class="actions">${hasIt ? `<span class="muted">${icon('check')} ${t('learned')}</span>` : !isOpen ? `<span class="muted">${icon('lock')} ${t('locked')}</span>` : p.points <= 0 ? `<span class="muted">${t('needPoint')}</span>` : `<button class="btn gold small" data-learn="${sel.id}">${t('learn')}</button>`}</div></div>`;
   }
   openOverlay('tal', `
-    <h2>${icon('sparkles')} ${t('talents')}</h2><p class="points">${t('points', p.points)}</p>
-    <div class="tree">${tree.map((br, b) => `<div class="branch">${br.map((n) => node(n, b)).join('<i class="link"></i>')}</div>`).join('')}</div>
+    <h2>${icon('sparkles')} ${t('talents')}</h2>
+    <p class="points">${t('points', p.points)} <small class="muted">${t('talSpent', spent)}</small></p>
+    <div class="branches">${tree.map((br, b) => `<div class="branch">
+      <h4>${icon(BRANCH_ICONS[p.cls][b])} ${L(names[b].name)}</h4>
+      <div class="levels">${Array.from({ length: 10 }, (_, i) => `<div class="lvl"><i>${i + 1}</i>${br.filter((n) => lvlOf(n) === i + 1).map(node).join('')}</div>`).join('')}</div>
+    </div>`).join('')}</div>
     ${detail}`);
 }
 
@@ -464,10 +503,11 @@ document.addEventListener('click', async (ev) => {
   const el = ev.target.closest('button, [data-go]');
   if (!el) return;
   const go = el.dataset.go;
+  if (el.dataset.close) { closeOverlay(); return; }
   if (el.dataset.cls) { pick.cls = el.dataset.cls; pick.name = $('#hero-name').value; sfx('click'); renderSelect(); return; }
   if (el.dataset.relic != null) { pick.relic = el.dataset.relic || null; pick.name = $('#hero-name').value; renderSelect(); return; }
   if (el.dataset.heir != null) { pick.heir = !!el.dataset.heir; pick.name = $('#hero-name').value; renderSelect(); return; }
-  if (el.dataset.buy) { if (buy(meta, UPGRADES.find((u) => u.id === el.dataset.buy))) { saveMeta(meta); pushMeta(); sfx('level'); renderSanctuary(); } return; }
+  if (el.dataset.buyup) { if (buy(meta, UPGRADES.find((u) => u.id === el.dataset.buyup))) { saveMeta(meta); pushMeta(); sfx('level'); renderSanctuary(); } return; }
   if (el.dataset.tab) { hallTab = el.dataset.tab; renderHall(); return; }
   if (el.dataset.skill) { useSkill(el.dataset.skill); return; }
   if (el.dataset.item) { invSel = Number(el.dataset.item); inventory(); return; }
@@ -479,6 +519,8 @@ document.addEventListener('click', async (ev) => {
     return;
   }
   if (el.dataset.tal) { talSel = el.dataset.tal; talents(); return; }
+  if (el.dataset.buy) { if (g && g.buy(Number(el.dataset.buy))) { sfx('pickup'); saveRun(g); } if (overlay === 'shop') shop(); return; }
+  if (el.dataset.sell) { if (g.sell(Number(el.dataset.sell))) { sfx('pickup'); saveRun(g); } shop(); return; }
   if (el.dataset.learn) { if (g.learn(el.dataset.learn)) { sfx('level'); saveRun(g); } talents(); return; }
   switch (go) {
     case 'continue': { const s = loadRun(); if (s) { try { startRun(new Game(s)); } catch (e) { console.error(e); clearRun(); show('title'); } } break; }
@@ -497,6 +539,7 @@ document.addEventListener('click', async (ev) => {
     case 'wait': act({ type: 'wait' }); break;
     case 'descend': act({ type: 'descend' }); break;
     case 'inv': if (overlay === 'inv') closeOverlay(); else { invSel = null; inventory(); } break;
+    case 'shop': if (overlay === 'shop') closeOverlay(); else shop(); break;
     case 'tal': if (overlay === 'tal') closeOverlay(); else { talSel = null; talents(); } break;
     case 'map': if (overlay === 'map') { restoreMinimap(); closeOverlay(); } else mapView(); break;
     case 'pause': if (overlay === 'pause') closeOverlay(); else pauseMenu(); break;
@@ -607,7 +650,7 @@ async function boot() {
     R.frame(now);
   };
   requestAnimationFrame(loop);
-  if (/[?&]debug/.test(location.search)) window.d101 = { get g() { return g; }, R, after, hud, startRun, Game };
+  if (/[?&]debug/.test(location.search)) window.d101 = { get g() { return g; }, R, after, hud, startRun, Game, shop, inventory, talents };
   await R.load(ART);
   Cloud.onChange((u) => { renderAccount(); if (u) pullMeta(); });
   Cloud.restore();

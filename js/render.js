@@ -15,6 +15,9 @@ const PALETTE = {
   forge: { floor: [70, 46, 38], wall: [32, 18, 16], face: [104, 58, 44], mortar: [46, 26, 22], ambient: 0.4, dust: '#ffb066' },
   cathedral: { floor: [44, 56, 66], wall: [20, 28, 38], face: [58, 76, 92], mortar: [26, 36, 46], ambient: 0.4, dust: '#bfe4ff' },
   throne: { floor: [54, 50, 60], wall: [22, 20, 28], face: [76, 70, 86], mortar: [32, 30, 40], ambient: 0.36, dust: '#d9c8ff' },
+  cistern: { floor: [40, 52, 58], wall: [14, 22, 28], face: [46, 66, 76], mortar: [20, 30, 36], ambient: 0.5, dust: '#7fd3ff' },
+  kiln: { floor: [66, 54, 44], wall: [30, 22, 18], face: [98, 76, 56], mortar: [44, 32, 26], ambient: 0.34, dust: '#ffcf8a' },
+  door: { floor: [48, 46, 56], wall: [18, 18, 26], face: [70, 66, 84], mortar: [28, 26, 36], ambient: 0.3, dust: '#ffe9b0' },
 };
 const rgb = (c, k = 1, a = 1) => `rgba(${Math.round(c[0] * k)},${Math.round(c[1] * k)},${Math.round(c[2] * k)},${a})`;
 
