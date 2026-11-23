@@ -316,17 +316,23 @@ function hud() {
   if (p.venom > 0) sts.push(['droplet', '#5ee08a', p.venom]);
   if (g.relic) sts.push([RELICS[g.relic].icon, '#ffd36b', '']);
   $('#hero .st').innerHTML = sts.map(([n, col, v]) => `<span style="color:${col}">${icon(n)}${v}</span>`).join('');
+  const mapBtn = $('#mapbox');
+  if (mapBtn) { mapBtn.title = `${t('map')} · ${L(act.name)} · ${t('floorOf', g.floor, FLOORS)}`; mapBtn.setAttribute('aria-label', mapBtn.title); }
   $('#where').innerHTML = `<b>${L(act.name)}</b><span>${t('floorOf', g.floor, FLOORS)}</span><span class="gold">${icon('coins')} ${p.gold}</span>`;
   // skills
   const known = g.skills();
+  const potions = p.bag.filter((x) => x.kind === 'heal' || x.kind === 'greatHeal').reduce((n, x) => n + (x.n || 1), 0);
   $('#skills').innerHTML = c.skills.map((id, i) => {
     const sk = SKILLS[id], k = known.includes(id), cd = p.cds[id] || 0, cost = g.skillCost(id), poor = k && !cd && p.mp < cost;
-    return `<button class="act ${!k ? 'locked' : ''} ${cd || poor ? 'cd' : ''} ${targeting?.id === id ? 'aim' : ''}" data-skill="${id}" ${!k ? 'disabled' : ''} title="${esc(L(sk.name) + ' · ' + L(sk.desc))}">
-      ${icon(k ? sk.icon : 'lock')}<kbd>${i + 1}</kbd>${cd ? `<em>${cd}</em>` : `<em class="cost ${poor ? 'poor' : ''}">${cost}</em>`}<span>${L(sk.name)}</span></button>`;
+    const why = !k ? 'locked' : cd ? 'cool' : poor ? 'poor' : '';
+    return `<button class="act ${why} ${targeting?.id === id ? 'aim' : ''}" data-skill="${id}" ${!k ? 'disabled' : ''} title="${esc(L(sk.name) + ' · ' + L(sk.desc))}" aria-label="${esc(L(sk.name))}">
+      <kbd>${i + 1}</kbd>${icon(k ? sk.icon : 'lock')}
+      ${cd ? `<em class="cd">${cd}</em>` : k ? `<em class="cost ${poor ? 'poor' : ''}" title="${t('mana')}">${cost}</em>` : ''}
+      <span>${L(sk.name)}</span></button>`;
   }).join('') + `
-    <button class="act potion" data-go="potion" title="${esc(L(CONSUMABLES.heal.name))}">${icon('flask-conical')}<kbd>4</kbd><em class="n">${p.bag.filter((x) => x.kind === 'heal').length}</em><span>${t('potion')}</span></button>
-    <button class="act" data-go="wait" title="${t('wait')}">${icon('hourglass')}<kbd>5</kbd><span>${t('wait')}</span></button>
-    ${g.onStairs() ? `<button class="act stairs" data-go="descend">${icon('arrow-down-to-line')}<kbd>↵</kbd><span>${t('descend')}</span></button>` : ''}`;
+    <button class="act potion ${potions ? '' : 'locked'}" data-go="potion" title="${esc(L(CONSUMABLES.heal.name))}" aria-label="${t('potion')}">${icon('flask-conical')}<kbd>4</kbd>${potions ? `<em class="n">${potions}</em>` : ''}<span>${t('potion')}</span></button>
+    <button class="act" data-go="wait" title="${t('wait')}" aria-label="${t('wait')}">${icon('hourglass')}<kbd>5</kbd><span>${t('wait')}</span></button>
+    ${g.onStairs() ? `<button class="act stairs" data-go="descend" title="${t('descend')}" aria-label="${t('descend')}">${icon('arrow-down-to-line')}<kbd>↵</kbd><span>${t('descend')}</span></button>` : ''}`;
   $('#btn-talents').classList.toggle('glow', p.points > 0);
   $('#btn-talents em').textContent = p.points || '';
   // boss bar
@@ -342,7 +348,8 @@ function hud() {
     $('#focus .n').innerHTML = `${esc(L(ENEMIES[f.type].name))}${f.elite ? ` <i>${lang === 'it' ? 'élite' : 'elite'}</i>` : ''}`;
     setBar('#focus', f.hp, f.maxHp, `${f.hp} / ${f.maxHp}`);
   }
-  $('#log').innerHTML = g.log.slice(-5).map((l, i, a) => `<p class="${l.c}" style="opacity:${0.35 + 0.65 * (i + 1) / a.length}">${esc(l.s)}</p>`).join('');
+  const lines = g.log.slice(-5);
+  $('#log').innerHTML = lines.map((l, i) => `<p class="${l.c}" style="opacity:${(0.3 + 0.7 * (i + 1) / lines.length).toFixed(2)}">${esc(l.s)}</p>`).join('');
   R.drawMinimap(overlay === 'map');
 }
 
@@ -521,10 +528,20 @@ function talents() {
 }
 
 function pauseMenu() {
+  const p = g?.player;
+  const stat = p ? `<div class="pausestats">
+    <span>${icon('castle')}${t('floorOf', g.floor, FLOORS)}</span>
+    <span>${icon('skull')}${g.stats.kills}</span>
+    <span>${icon('coins')}${p.gold}</span>
+    <span>${icon('sparkles')}${p.points ? `${p.points} ${t('pointsShort')}` : t('talents')}</span></div>` : '';
   openOverlay('pause', `
     <h2>${t('pause')}</h2>
+    ${stat}
     <div class="menu">
       <button class="btn gold" data-go="close">${icon('play')}<span>${t('resume')}</span></button>
+      ${p ? `<button class="btn" data-go="tal">${icon('sparkles')}<span>${t('talents')}</span><small>${p.points ? `${p.points} ${t('pointsShort')}` : ''}</small></button>
+      <button class="btn" data-go="inv">${icon('backpack')}<span>${t('inventory')}</span></button>
+      <button class="btn" data-go="map">${icon('map')}<span>${t('map')}</span></button>` : ''}
       <button class="btn" data-go="sound">${icon(soundOn() ? 'volume-2' : 'volume-x')}<span>${t('sound')}: ${t(soundOn() ? 'on' : 'off')}</span></button>
       <button class="btn" data-go="shake">${icon('move')}<span>${t('motion')}: ${t(R.shakeOn ? 'on' : 'off')}</span></button>
       <button class="btn" data-go="lang">${icon('settings')}<span>${t('language')}: ${lang.toUpperCase()}</span></button>
@@ -540,7 +557,16 @@ function info() {
 }
 
 function mapView() {
-  openOverlay('map', `<h2>${icon('map')} ${t('map')}</h2><div class="bigmap"></div>`);
+  const p = g.player, act = actOf(g.floor);
+  const marks = [];
+  if (g.merchant) marks.push(`${icon('store')} ${t('merchant')}`);
+  if (g.fountain && !g.fountain.used) marks.push(`${icon('flask-conical')} ${t('fountain')}`);
+  if (g.stairsOpen) marks.push(`${icon('arrow-down-to-line')} ${t('stairsOpen')}`);
+  else marks.push(`${icon('x')} ${t('stairsShut')}`);
+  openOverlay('map', `<h2>${icon('map')} ${t('map')}</h2>
+    <p class="mapmeta">${icon('compass')} ${L(act.name)} · ${t('floorOf', g.floor, FLOORS)} · ${icon('skull')} ${t('mapFoes', g.enemies.filter((e) => !e.ally && e.hp > 0).length)}</p>
+    <div class="bigmap"></div>
+    <div class="maplegend">${marks.map((m) => `<span>${m}</span>`).join('')}</div>`);
   const holder = $('#overlay .bigmap');
   holder.append($('#minimap'));
   R.drawMinimap(true);

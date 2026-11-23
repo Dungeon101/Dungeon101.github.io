@@ -700,8 +700,10 @@ export class Renderer {
   // explored map in the corner
   drawMinimap(big = false) {
     const g = this.g, m = g.map, c = this.mctx, cv = this.mini;
-    const s = big ? Math.max(4, Math.floor(Math.min(innerWidth * 0.9 / m.w, innerHeight * 0.7 / m.h))) : 3;
+    const s = big ? Math.max(4, Math.floor(Math.min(innerWidth * 0.55 / m.w, innerHeight * 0.62 / m.h))) : 3;
     if (cv.width !== m.w * s) { cv.width = m.w * s; cv.height = m.h * s; }
+    if (big) { cv.style.width = `${m.w * s}px`; cv.style.height = `${m.h * s}px`; cv.style.imageRendering = 'pixelated'; }
+    else { cv.style.width = ''; cv.style.height = ''; }
     c.clearRect(0, 0, cv.width, cv.height);
     for (let y = 0; y < m.h; y++) for (let x = 0; x < m.w; x++) {
       const i = y * m.w + x;

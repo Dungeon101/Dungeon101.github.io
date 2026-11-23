@@ -183,7 +183,9 @@ tr.win td { color: var(--gold); }
 #where { padding: 8px 14px; display: flex; flex-direction: column; align-items: flex-end; font-size: 12px; color: var(--muted); }
 #where b { font: 700 15px var(--display); color: var(--ink); }
 #where .gold { color: var(--gold); display: inline-flex; gap: 4px; align-items: center; font-weight: 600; }
-#mapbox { padding: 6px; line-height: 0; max-width: 180px; }
+#mapbox { padding: 6px; line-height: 0; max-width: 180px; border: 1px solid var(--line); border-radius: 14px; cursor: pointer; transition: border-color 0.15s, transform 0.1s; }
+#mapbox:hover { border-color: var(--gold2); }
+#mapbox:active { transform: scale(0.98); }
 #minimap { max-width: 100%; height: auto; image-rendering: pixelated; }
 .buttons { display: flex; gap: 8px; }
 .round { position: relative; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--line); background: var(--glass); backdrop-filter: blur(6px); }
@@ -210,8 +212,17 @@ tr.win td { color: var(--gold); }
 .act .ico { width: 26px; height: 26px; color: var(--gold); }
 .act span { font-size: 9.5px; line-height: 1.1; max-width: 62px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
 .act kbd { position: absolute; top: 3px; left: 5px; font: 600 9px var(--body); color: var(--muted); }
+/* il costo in mana sta in alto a destra, la ricarica al centro, le cariche in basso a destra:
+   ogni angolo dice una cosa sola, così l'abilità si legge in un colpo d'occhio */
 .act em { position: absolute; inset: 0; display: grid; place-items: center; border-radius: 14px; background: rgba(0, 0, 0, 0.62); font: 900 24px var(--display); font-style: normal; color: #fff; }
+.act em.cost { inset: 3px 4px auto auto; background: none; display: block; font: 700 10.5px/1 var(--body); color: #7fc4ff; }
+.act em.cost.poor { color: #ff7a6a; }
+.act em.cd { background: rgba(6, 10, 18, 0.72); color: #cfe6ff; }
 .act em.n { inset: auto 3px 3px auto; background: var(--blood); width: 18px; height: 18px; border-radius: 9px; font: 700 11px/18px var(--body); }
+.act.cool .ico { color: #6f7d8c; }
+.act.poor .ico { color: #5d6f86; }
+.act.cool, .act.poor { border-color: rgba(120, 160, 200, 0.25); }
+.act:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .act:hover:not(:disabled) { border-color: var(--gold2); transform: translateY(-2px); }
 .act:active:not(:disabled) { transform: translateY(1px); }
 .act.locked { opacity: 0.4; }
@@ -445,3 +456,23 @@ tr.win td { color: var(--gold); }
 .shelf .upgrades { padding: 4px 12px 12px; }
 .card.up.can { border-color: rgba(255, 211, 107, 0.35); }
 .card.up h3 .lv { font-style: normal; font-size: 11px; color: var(--gold); margin-left: 4px; }
+
+/* mappa a tutto schermo: dove sei, cosa c'è ancora da fare, cosa manca */
+.mapmeta { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; margin: 0 0 8px; font-size: 12.5px; color: var(--muted); }
+.mapmeta .ico { width: 14px; height: 14px; }
+.maplegend { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; margin-top: 10px; font-size: 11.5px; color: var(--muted); }
+.maplegend span { display: inline-flex; align-items: center; gap: 5px; }
+.maplegend .ico { width: 13px; height: 13px; color: var(--gold2); }
+
+/* pausa: le statistiche della partita in corso, poi i comandi */
+.pausestats { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; margin: 0 0 12px; font-size: 12.5px; color: var(--muted); }
+.pausestats span { display: inline-flex; align-items: center; gap: 5px; }
+.pausestats .ico { width: 14px; height: 14px; color: var(--gold2); }
+.o-pause .menu .btn small { margin-left: auto; font-size: 11px; color: var(--gold); }
+
+/* su telefono il costo in mana non ha spazio: resta la ricarica e il colore dice il resto */
+@media (max-width: 780px) {
+  .act em.cost { font-size: 9px; inset: 2px 3px auto auto; }
+  .act kbd { display: none; }
+  #log { max-height: 3.6em; overflow: hidden; }
+}
