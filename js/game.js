@@ -683,7 +683,7 @@ export class Game {
   targets(id) {
     const p = this.player, sk = SKILLS[id], m = this.map;
     if (sk.target === 'adjacent') return this.enemies.filter((e) => dist(e, p) === 1 && (e.x === p.x || e.y === p.y || (tile(m, e.x, p.y) !== WALL && tile(m, p.x, e.y) !== WALL)));
-    if (sk.target === 'enemy') return this.visibleEnemies().filter((e) => !e.ally && dist(e, p) <= sk.range && los(m, p, e)).sort((a, b) => dist(a, p) - dist(b, p));
+    if (sk.target === 'enemy') return this.visibleEnemies().filter((e) => !e.ally && dist(e, p) <= sk.range && this.laneClear(p, e, sk.block)).sort((a, b) => dist(a, p) - dist(b, p));
     if (sk.target === 'tile') {
       const out = [];
       for (let y = p.y - sk.range; y <= p.y + sk.range; y++) for (let x = p.x - sk.range; x <= p.x + sk.range; x++)
@@ -699,7 +699,12 @@ export class Game {
     let target = null;
     if (sk.target) {
       target = this.targets(id).find((c) => c.x === x && c.y === y);
-      if (!target) { this.say(t('lNoTarget')); return false; }
+      if (!target) {
+        // there is something in the way: say so instead of "no target", the two feel very different
+        const blocked = this.visibleEnemies().find((e) => e.x === x && e.y === y && dist(e, p) <= sk.range);
+        this.say(blocked ? t('lInTheWay') : t('lNoTarget'));
+        return false;
+      }
     }
     const adjacent = () => this.enemies.filter((e) => !e.ally && dist(e, p) === 1);
     const spell = (lo, hi) => rint(lo, hi) + st.power;
@@ -891,7 +896,7 @@ export class Game {
         break;
       }
       case 'rain': {
-        const list = this.visibleEnemies();
+        const list = this.visibleEnemies().filter((e) => this.laneClear(p, e, 'arrow'));
         if (!list.length) { this.say(t('lNoTarget')); return false; }
         for (const e of list) for (let i = 0; i < 2; i++) {
           this.emit({ t: 'shot', a: p.id, d: e.id, k: 'arrow', x0: p.x, y0: p.y, x1: e.x, y1: e.y });
@@ -1164,10 +1169,31 @@ export class Game {
     const reach = d === 1 && (e.x === p.x || e.y === p.y || (tile(m, e.x, p.y) !== WALL && tile(m, p.x, e.y) !== WALL));
     if (def.ai === 'ranged') {
       if (reach && !e.boss && chance(0.5) && this.stepBy(e, dm, 1)) return;
-      if (d > 1 && d <= def.range && los(m, e, p)) { this.strike(e, p, { kind: def.shot }); return; }
+      if (d > 1 && d <= def.range && los(m, e, p) && this.laneClear(e, p, def.shot)) { this.strike(e, p, { kind: def.shot }); return; }
     }
     if (reach) { this.strike(e, p); return; }
     this.stepBy(e, dm, -1);
+  }
+
+  // What a shot has to get through to land: walls stop everything, and so does the first body in the way
+  // (a wall of friends, a summoned wolf, a hero hiding behind a pillar). Fire and frost burn the first thing
+  // they meet instead of flying on; arrows and bolts are stopped by a body and nothing else.
+  laneClear(from, to, kind) {
+    const m = this.map;
+    let x = from.x, y = from.y;
+    const dx = Math.abs(to.x - x), dy = -Math.abs(to.y - y), sx = Math.sign(to.x - x), sy = Math.sign(to.y - y);
+    let err = dx + dy;
+    const seeThrough = kind === 'shadow' || kind === 'bolt';
+    for (;;) {
+      const e2 = 2 * err;
+      if (e2 >= dy) { err += dy; x += sx; }
+      if (e2 <= dx) { err += dx; y += sy; }
+      if (x === to.x && y === to.y) return true;
+      if (tile(m, x, y) === WALL) return false;
+      if (seeThrough) continue;
+      const body = this.enemies.find((e) => e.hp > 0 && e.x === x && e.y === y) || (this.player.x === x && this.player.y === y ? this.player : null);
+      if (body) return false;
+    }
   }
 
   // dir -1: toward the player, 1: away from the player
@@ -1226,7 +1252,7 @@ export class Game {
       if (half) e.dmg = [6, 12];
     } else if (e.type === 'broodmother') {
       if (e.cd.a <= 0 && this.summon(e, 'spiderling', 2, 4)) { e.cd.a = 6; return true; }
-      if (e.cd.b <= 0 && d > 1 && d <= 7 && los(m, e, p)) {
+      if (e.cd.b <= 0 && d > 1 && d <= 7 && los(m, e, p) && this.laneClear(e, p, 'web')) {
         this.emit({ t: 'shot', a: e.id, d: p.id, k: 'web', x0: e.x, y0: e.y, x1: p.x, y1: p.y });
         p.st.web = 2; this.say(t('lWebbed'), 'bad'); this.damage(p, 3, false, e);
         e.cd.b = 4; return true;
@@ -1264,7 +1290,7 @@ export class Game {
       if (half) e.dmg = [12, 20];
     } else if (e.type === 'frostQueen') {
       // freezes the ground under the hero, and calls the drowned when the ice breaks
-      if (e.cd.b <= 0 && d <= 8 && los(m, e, p)) {
+      if (e.cd.b <= 0 && d <= 8 && los(m, e, p) && this.laneClear(e, p, 'bolt')) {
         this.telegraph([{ x: p.x, y: p.y }, ...around(1).filter(() => chance(0.5))], rint(12, 18), 'frost');
         e.cd.b = half ? 3 : 4; return true;
       }
