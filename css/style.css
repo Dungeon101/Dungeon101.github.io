@@ -300,11 +300,20 @@ tr.win td { color: var(--gold); }
 .detail ul.cmp { color: var(--muted); }
 .points { color: var(--gold); text-align: center; font-family: var(--display); }
 /* cinque rami, dieci livelli: il ramo scorre in orizzontale, i livelli in verticale */
-.branches { display: flex; flex-direction: column; gap: 10px; }
-.branches .branch { display: block; padding: 10px 12px 12px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.07); background: rgba(0, 0, 0, 0.22); }
+/* talenti: cinque rami affiancati, livelli in colonna; la scheda del nodo è un popup accanto al nodo */
+.branches { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.o-tal .panel { position: relative; }
+.tpop { position: absolute; z-index: 5; width: 240px; padding: 12px 14px; border-radius: 14px; background: linear-gradient(180deg, rgba(40, 32, 38, 0.99), rgba(18, 14, 18, 0.99)); border: 1px solid var(--gold2); box-shadow: 0 14px 40px rgba(0, 0, 0, 0.7); display: flex; flex-direction: column; gap: 5px; }
+.tpop h3 { font-size: 14.5px; color: var(--gold); }
+.tpop p { font-size: 12.5px; color: #e8e2d8; }
+.tpop small { font-size: 11px; }
+.tpop .row { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+.tpop .row .muted { font-size: 11.5px; }
+@media (max-width: 780px) { .branches { grid-template-columns: repeat(2, minmax(0, 1fr)); } .tpop { position: fixed; left: 50% !important; top: auto !important; bottom: 12px; transform: translateX(-50%); width: min(320px, 92vw); } }
+.branches .branch { display: block; padding: 8px 8px 10px; min-width: 0; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.07); background: rgba(0, 0, 0, 0.22); }
 .branches .branch h4 { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .branches .branch h4 .ico { width: 14px; height: 14px; color: var(--gold2); }
-.levels { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.levels { display: grid; grid-template-columns: 1fr; gap: 5px; }
 .o-tal .panel { width: min(1040px, 100%); }
 
 .lvl { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -376,3 +385,27 @@ tr.win td { color: var(--gold); }
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition: none !important; }
   #floor-card.on, #boss-card.on, .toast { animation-duration: 2.5s !important; }
 }
+
+/* confronto oggetti: due colonne di numeri sulle stesse righe, il delta a destra con la freccia */
+.detail .head { display: grid; grid-template-columns: 34px 1fr auto; gap: 10px; align-items: center; }
+.detail .head > .ico { width: 30px; height: 30px; color: var(--r, var(--gold)); }
+.detail .head h3 { font-size: 16px; }
+.verdict { display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.02em; }
+.verdict .ico { width: 13px; height: 13px; }
+.verdict.up { color: #0b140d; background: linear-gradient(180deg, #7cf0a8, #3fc472); }
+.verdict.down { color: #1a0d0c; background: linear-gradient(180deg, #ff9a8d, #e2574a); }
+.verdict.mix { color: #1a1405; background: linear-gradient(180deg, #ffe07a, #e8b53c); }
+.cmphead, .cmprow { display: grid; grid-template-columns: 1fr 46px 46px 40px; align-items: center; gap: 6px; }
+.cmphead { margin-top: 6px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.cmphead span:nth-child(2), .cmphead span:nth-child(3) { text-align: center; }
+.cmprows { display: flex; flex-direction: column; gap: 2px; }
+.cmprow { padding: 5px 6px; border-radius: 8px; background: rgba(255, 255, 255, 0.03); font-size: 12.5px; }
+.cmprow .k { display: flex; align-items: center; gap: 6px; color: #d9d2c6; }
+.cmprow .k .ico { width: 13px; height: 13px; color: var(--muted); }
+.cmprow b { text-align: center; font-variant-numeric: tabular-nums; font-weight: 700; }
+.cmprow .d { text-align: right; font-size: 11.5px; font-weight: 700; color: var(--muted); }
+.cmprow.up { background: rgba(94, 224, 138, 0.1); }
+.cmprow.up .d { color: #5ee08a; }
+.cmprow.down { background: rgba(255, 107, 91, 0.1); }
+.cmprow.down .d { color: #ff6b5b; }
+.detail ul.own { margin: 4px 0 0; }

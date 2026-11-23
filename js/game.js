@@ -37,6 +37,26 @@ export function itemLines(it) {
   return out;
 }
 
+// the numbers of an item, so two items can be put side by side: what goes up and what goes down.
+// The order is the order a player thinks in: damage, armour, HP, then the rest.
+const STAT_ORDER = ['power', 'ac', 'hp', 'hit', 'crit', 'regen', 'steal', 'gold', 'light', 'pool', 'manaRegen', 'thorns', 'dodge', 'xp'];
+export function itemStats(it) {
+  const out = {};
+  if (!it || it.slot === 'use' || it.kind === 'gold') return out;
+  if (it.power) out.power = it.power;
+  if (it.ac) out.ac = it.ac;
+  for (const [k, v] of Object.entries(it.mods || {})) out[k] = (out[k] || 0) + v;
+  return out;
+}
+// [{ key, mine, theirs, d }] in a fixed order, only the keys either item has
+export function itemCompare(mine, theirs) {
+  const a = itemStats(mine), b = itemStats(theirs);
+  return STAT_ORDER.filter((k) => a[k] != null || b[k] != null)
+    .map((k) => ({ key: k, mine: a[k] || 0, theirs: b[k] || 0, d: (a[k] || 0) - (b[k] || 0) }));
+}
+export const statLabel = (k, v) => (MODS[k] ? MODS[k][lang].replace('{0}', v) : `${k} ${v}`);
+export const statShort = (k) => ({ power: 'sword', ac: 'shield', hp: 'heart', hit: 'target', crit: 'sparkles', regen: 'heart-pulse', steal: 'droplet', gold: 'coins', light: 'flame', pool: 'droplet', manaRegen: 'waves', thorns: 'shield-exclamation-point', dodge: 'wind', xp: 'sparkles' }[k] || 'circle');
+
 export class Game {
   constructor(data) {
     Object.assign(this, data);
@@ -59,13 +79,29 @@ export class Game {
     };
     const g = new Game({
       floor: 0, turn: 0, uid: 2, player, enemies: [], items: [], chests: [], hazards: [], fountain: null, merchant: null, stairsOpen: true, log: [], over: null, killer: null,
-      relic, relicLvl: clamp(relicLvl || 1, 1, 5), bonus: { hp: up('vigor') * 5, power: up('edge'), ac: up('guard'), gold: up('fortune') * 0.2, light: up('torch') },
+      relic, relicLvl: clamp(relicLvl || 1, 1, 5), up: { ...(meta.upgrades || {}) },
+      // the sanctuary's bonuses, read once at the start of the run (up() is still there for the rest)
+      bonus: {
+        hp: up('vigor') * 5, power: up('edge'), ac: up('guard'), gold: up('fortune') * 0.2, light: up('torch'),
+        hit: up('aim'), crit: up('crit'), dodge: up('dodge') * 4, thorns: up('thorns') * 2, regen: up('regen'), leech: up('leech'),
+        evade: up('evade'), bulwark: up('bulwark') * 6, mercy: up('mercy') * 2, pool: up('pool') * 4, manaRegen: up('flow'),
+        spell: up('spellpower') * 0.06, manafloor: up('manafloor') * 3, cheap: up('cheap') * 0.06, potency: up('potency') * 0.15,
+        forage: up('forage'), luck: up('luck') * 6, pockets: up('pockets') * 4, scavenger: up('scavenger') * 0.1,
+        keepsake: up('keepsake') * 0.15, anvil: up('anvil'), greed: up('greed') * 0.08, haggle: up('haggle') * 0.08,
+        xp: up('xp') * 0.12, lantern: up('lantern') * 2, map: up('map') * 0.25, stairs: up('stairs') * 4, sprint: up('sprint'),
+        stealth: up('stealth') * 2, swift: up('swift'), focus: up('focus'), pierce: up('pierce'), bleed: up('bleed'),
+        executioner: up('executioner') * 0.08, firstblood: up('firstblood') * 2, companion: up('companion') * 0.2,
+        sanctuary: up('sanctuary') * 0.04, fountain: up('fountain') * 0.2, ward: up('ward') * 5, resist: up('resist'),
+        critpower: up('critpower') * 0.2,
+      },
       stats: { kills: 0, gold: 0, bosses: [] }, map: null,
     });
     player.equip.weapon = g.makeEquip('weapon', 1, 0, true);
+    if (g.bonus.anvil) { player.equip.weapon.power += g.bonus.anvil; player.equip.weapon.tier = Math.min(5, player.equip.weapon.tier + g.bonus.anvil); }
     for (let i = 0; i < 1 + up('satchel'); i++) player.bag.push(g.makeUse('heal'));
-    if (heirloom) {
+    if (heirloom && g.bonus.heirloom > 0) {
       const it = { ...heirloom, uid: g.uid++ };
+      if (g.bonus.heirloom > 0) { it.power = Math.round((it.power || 0) * (1 + g.bonus.heirloom)); it.ac = Math.round((it.ac || 0) * (1 + g.bonus.heirloom)); }
       const c = CLASSES[cls];
       if (it.slot === 'weapon' && !c.weapons.includes(it.base)) it.base = c.weapons[0];
       if (it.slot === 'armor') it.base = c.armor;
@@ -114,16 +150,20 @@ export class Game {
     }
     return {
       maxHp: Math.round((c.hp + (p.lvl - 1) * c.hpLvl + b.hp + m.hp + (tb.hp || 0) + (this.relic === 'heart' ? 8 * this.rl() : 0)) * (this.relic === 'key' ? 1 + 0.1 * this.rl() : 1)),
-      ac: c.ac + b.ac + m.ac + (tb.ac || 0) + (this.relic === 'scale' ? 2 * this.rl() : 0) + (F.has('shieldwall') && near.length > 1 ? 2 : 0) + (F.has('aura') ? this.enemies.filter((e) => e.ally && dist(e, p) === 1).length : 0),
-      hit: c.hit + Math.floor(p.lvl / 2) + m.hit + (tb.hit || 0),
+      ac: c.ac + b.ac + m.ac + (tb.ac || 0) + (this.relic === 'scale' ? 2 * this.rl() : 0) + (F.has('shieldwall') && near.length > 1 ? 2 : 0) + (F.has('aura') ? this.enemies.filter((e) => e.ally && dist(e, p) === 1).length : 0)
+        + (near.length >= 3 ? (b.bulwark || 0) : 0) + (p.hp < (c.hp + (p.lvl - 1) * c.hpLvl + b.hp) * 0.25 ? (b.mercy || 0) : 0),
+      hit: c.hit + Math.floor(p.lvl / 2) + m.hit + (tb.hit || 0) + (b.hit || 0),
       power: b.power + m.power + Math.floor((p.lvl - 1) / 3) + (tb.power || 0) + (F.has('rampage') ? Math.min(8, this.stats.kills - (this.floorKills || 0)) : 0),
-      crit: c.crit - Math.min(2, m.crit) - (F.has('lucky') ? 1 : 0) - (tb.crit ? 20 - tb.crit : 0),
+      crit: c.crit - Math.min(2, m.crit) - (F.has('lucky') ? 1 : 0) - (tb.crit ? 20 - tb.crit : 0) - (b.crit || 0),
       regenRelic: this.relic === 'heart' && this.rl() >= 4 ? 1 : 0,
-      dmg: c.dmg, regen: m.regen + (tb.regen || 0) + (this.relic === 'heart' && this.rl() >= 4 ? 1 : 0), steal: m.steal + (tb.steal || 0),
+      dmg: c.dmg, regen: m.regen + (tb.regen || 0) + (this.relic === 'heart' && this.rl() >= 4 ? 1 : 0) + (b.regen || 0), steal: m.steal + (tb.steal || 0) + (b.leech || 0),
       gold: 1 + b.gold + m.gold / 100 + (tb.gold || 0) / 100 + (F.has('lucky') ? 0.25 : 0) + (this.relic === 'coin' ? 0.2 * this.rl() : 0),
       light: 7 + b.light + m.light + (tb.sight || 0) + (this.relic === 'lantern' ? this.rl() : 0),
-      melee: 1 + (tb.melee || 0) / 100, spell: 1 + (tb.spell || 0) / 100, heal: 1 + (tb.heal || 0) / 100,
-      shieldMax: 1 + (tb.shieldMax || 0) / 100, petPower: 1 + (tb.petPower || 0) / 100,
+      melee: 1 + (tb.melee || 0) / 100, spell: 1 + (tb.spell || 0) / 100 + (b.spell || 0), heal: 1 + (tb.heal || 0) / 100,
+      shieldMax: 1 + (tb.shieldMax || 0) / 100, petPower: 1 + (tb.petPower || 0) / 100 + (b.companion || 0),
+      dodge: b.dodge || 0, thorns: b.thorns || 0, pierce: b.pierce || 0, bleed: b.bleed || 0,
+      executioner: b.executioner || 0, firstblood: b.firstblood || 0, critpower: b.critpower || 0,
+      resist: b.resist || 0, evade: b.evade || 0, potency: b.potency || 0,
     };
   }
 
@@ -166,7 +206,7 @@ export class Game {
   }
   manaRegen() {
     const p = this.player, c = CLASSES[p.cls], tb = this.talentBonus().stat;
-    return Math.max(1, c.regen + Math.floor(p.lvl / 5) + (tb.manaRegen || 0));
+    return Math.max(1, c.regen + Math.floor(p.lvl / 5) + (tb.manaRegen || 0) + (this.bonus.manaRegen || 0));
   }
   // what a skill costs right now, after the talents that make one cheaper
   skillCost(id) {
@@ -176,9 +216,18 @@ export class Game {
     if (id === 'firebolt' && F.has('pyromancy')) cost -= 1;
     if (id === 'whirlwind' && F.has('whirlwind')) cost -= 2;
     if (F.has('timewarp') && this.turn % 3 === 0) cost = 0;
+    // Frugal Casting: everything costs a little less; Concentration: the first skill of a floor is free
+    if (this.bonus.cheap) cost = Math.round(cost * (1 - this.bonus.cheap));
+    if (this.player.flags.freeCast) cost = 0;
     return Math.max(0, cost);
   }
   canCast(id) { return this.skills().includes(id) && this.player.mp >= this.skillCost(id) && (this.player.cds[id] || 0) === 0; }
+  // the mana a skill actually takes: canCast and useSkill both read it, so a free cast stays free
+  spend(id) {
+    const p = this.player, cost = this.skillCost(id);
+    if (p.flags.freeCast) p.flags.freeCast = false;
+    p.mp -= cost;
+  }
 
   // ---------- helpers ----------
   say(s, c = '') { this.log.push({ s, c }); if (this.log.length > 80) this.log.shift(); }
@@ -187,7 +236,13 @@ export class Game {
   chestAt(x, y) { return this.chests.find((c) => c.x === x && c.y === y && !c.open); }
   blocked(x, y) { return !walkable(this.map, x, y) || this.enemyAt(x, y) || (this.player.x === x && this.player.y === y) || this.chestAt(x, y); }
   isEnemy(e) { return !e.ally; }
-  seesPlayer(e) { return this.vis[e.y * this.map.w + e.x] && !(this.player.st.invis > 0); }
+  // Soft Step: the enemies notice the hero only up close
+  seesPlayer(e) {
+    if (this.player.st.invis > 0) return false;
+    const soft = this.bonus?.stealth || 0;
+    if (!this.vis[e.y * this.map.w + e.x]) return false;
+    return soft ? dist(e, this.player) <= Math.max(1, this.ps().light - soft) : true;
+  }
   visibleEnemies() { return this.enemies.filter((e) => this.vis[e.y * this.map.w + e.x]); }
   // a dying hero's killer is sometimes a string ('poison', 'burn'), not an enemy
   ename(e) { return typeof e === 'string' ? e : e?.ally ? t('lPetName') : L(ENEMIES[e.type].name); }
@@ -199,6 +254,9 @@ export class Game {
     for (let i = 0; i < this.vis.length; i++) if (this.vis[i]) m.seen[i] = 1;
     // the Eternal Lantern lights up every enemy at level 3
     if (this.relic === 'lantern' && this.rl() >= 3) for (const e of this.enemies) if (!e.ally) this.vis[e.y * m.w + e.x] = 1;
+    // Lantern Oil: enemies show through the walls, a little further with every level
+    const oil = this.bonus?.lantern || 0;
+    if (oil) for (const e of this.enemies) if (!e.ally && Math.max(Math.abs(e.x - p.x), Math.abs(e.y - p.y)) <= oil) this.vis[e.y * m.w + e.x] = 1;
   }
 
   freeCells(minFromStart = 0) {
@@ -220,7 +278,8 @@ export class Game {
 
   // ---------- items ----------
   rollRarity(min = 0) {
-    const w = RARITIES.map((r, i) => r.weight + (i === 3 ? this.floor * 0.6 : i === 2 ? this.floor : 0));
+    const luck = this.bonus?.luck || 0;
+    const w = RARITIES.map((r, i) => r.weight + (i === 3 ? this.floor * 0.6 + luck * 1.5 : i === 2 ? this.floor + luck : 0));
     let r = Math.random() * w.reduce((a, b) => a + b), i = 0;
     while (r > w[i]) r -= w[i++];
     return Math.max(min, i);
@@ -257,7 +316,8 @@ export class Game {
     return it;
   }
   // how many free places the bag has, counting a stack as one
-  bagFree() { return BAG - this.player.bag.length; }
+  bagFree() { return BAG + (this.bonus?.pockets || 0) - this.player.bag.length; }
+  bagSize() { return BAG + (this.bonus?.pockets || 0); }
 
   randomLoot(rarityMin = 0) {
     const r = Math.random();
@@ -270,7 +330,7 @@ export class Game {
   take(it, x, y) {
     const p = this.player;
     if (it.kind === 'gold') {
-      const n = Math.round(it.n * this.ps().gold);
+      const n = Math.round(it.n * this.ps().gold * (1 + (this.bonus?.scavenger || 0)));
       p.gold += n; this.stats.gold += n;
       this.say(t('lGold', n), 'gold'); this.emit({ t: 'fx', k: 'gold', x, y, n });
       return true;
@@ -293,7 +353,16 @@ export class Game {
     const p = this.player;
     p.x = m.start.x; p.y = m.start.y;
     p.flags.unbreakable = false; p.flags.secondWind = false; p.flags.guardian = false; p.flags.mirror = false;
+    p.flags.sprintUsed = false; p.flags.evade = 0;
     p.mp = this.manaPool();
+    // the sanctuary: mana back at the start of a floor, HP healed, a shield, the first skill free
+    const bo = this.bonus;
+    p.mp = Math.min(this.manaPool(), p.mp + (bo.manafloor || 0));
+    p.st.shield = (p.st.shield || 0) + (bo.ward || 0);
+    p.flags.freeCast = !!bo.focus;
+    if (bo.sanctuary) this.heal(Math.round(this.ps().maxHp * bo.sanctuary), true);
+    if (bo.forage) for (let i = 0; i < bo.forage; i++) this.give(this.makeUse(chance(0.7) ? 'heal' : 'mana'));
+    if (bo.map) for (let i = 0; i < m.seen.length; i++) if (chance(bo.map)) m.seen[i] = 1;
     this.floorKills = this.stats.kills;
     const act = actOf(n), boss = isBossFloor(n);
     this.stairsOpen = !boss;
@@ -358,9 +427,9 @@ export class Game {
     if (it.slot === 'use') return it.kind === 'greatHeal' ? 22 : 10 + this.floor * 2;
     return Math.round((itemScore(it) + 3) * (2.2 + this.floor * 0.5));
   }
-  sellPrice(it) { return Math.max(3, Math.round(this.priceOf(it) * 0.4)); }
+  sellPrice(it) { return Math.max(3, Math.round(this.priceOf(it) * 0.4 * (1 + (this.bonus?.greed || 0)))); }
   // the Miser's Coin makes everything in a shop cheaper
-  discount() { return this.relic === 'coin' ? 0.05 * this.rl() : 0; }
+  discount() { return (this.relic === 'coin' ? 0.05 * this.rl() : 0) + (this.bonus?.haggle || 0); }
   // the merchant's stock, with what he pays for everything in the bag
   shop() {
     const p = this.player;
@@ -447,7 +516,15 @@ export class Game {
       if (!this.onStairs()) return false;
       this.descend(); return true;
     }
-    if (done && !this.over) this.endTurn();
+    if (done && !this.over) {
+      // Sprinter: the first step on a floor is free, once per level
+      if (a.type === 'move' && this.bonus?.sprint && !p.flags.sprintUsed) {
+        p.flags.sprintUsed = true;
+        this.recompute();
+        return true;
+      }
+      this.endTurn();
+    }
     return done;
   }
 
@@ -483,7 +560,7 @@ export class Game {
     const f = this.fountain;
     if (f && !f.used && f.x === nx && f.y === ny) {
       f.used = true;
-      const st = this.ps(), n = st.maxHp - p.hp;
+      const st = this.ps(), n = Math.round((st.maxHp - p.hp) * (1 + (this.bonus.fountain || 0)));
       p.hp = st.maxHp; p.st.poison = 0;
       this.say(t('lFountain'), 'good'); this.emit({ t: 'fx', k: 'fountain', x: nx, y: ny }); if (n > 0) this.emit({ t: 'heal', id: p.id, n, x: nx, y: ny });
     }
@@ -499,7 +576,8 @@ export class Game {
     let crit = !o.noCrit && roll >= (isP ? this.critChance() : 20);
     if (isP && p.st.invis > 0) { crit = true; p.st.invis = 0; }
     if (isP && (F.has('ambush') || F.has('ghost')) && !d.touched) crit = true;
-    const hitBonus = isP ? st.hit : a.hit, ac = isP ? d.ac : st.ac;
+    // Piercing Blows: the hero's hits go through a few points of the enemy's armour
+    const hitBonus = isP ? st.hit : a.hit, ac = (isP ? d.ac - (st.pierce || 0) : st.ac);
     const hit = o.sure || crit || (roll !== 1 && roll + hitBonus >= ac);
     if (o.kind && o.kind !== 'melee' && o.kind !== 'spell') this.emit({ t: 'shot', a: a.id, d: d.id, k: o.kind, x0: a.x, y0: a.y, x1: d.x, y1: d.y });
     else if (o.kind !== 'spell') this.emit({ t: 'atk', a: a.id, d: d.id });
@@ -515,11 +593,12 @@ export class Game {
     if (isP && o.kind === 'spell') n *= st.spell;
     if (isP && o.kind !== 'spell') n *= st.melee;
     if (isP && F.has('wrath') && o.kind === 'spell') n *= 1.2;
-    if (crit) n *= isP && F.has('assassin') ? 3 : 2;
+    if (crit) n *= (isP && F.has('assassin') ? 3 : 2) * (isP && st.critpower ? 1 + st.critpower : 1);
     n *= o.mult || 1;
+    if (isP && st.firstblood && !d.touched) n += st.firstblood;
     if (isP) n *= this.playerMult(d);
     n = Math.max(1, Math.round(n));
-    if (!isP && p.st.dodge && chance(p.st.dodge / 100)) { this.say(t('lDodge')); return false; }
+    if (!isP && (p.st.dodge || 0) + (st.dodge || 0) > 0 && chance(((p.st.dodge || 0) + (st.dodge || 0)) / 100)) { this.say(t('lDodge')); this.emit({ t: 'miss', id: p.id, x: p.x, y: p.y }); return false; }
     if (!isP && F.has('ward') && chance(0.25)) {
       this.say(t('lWard'), 'good'); this.emit({ t: 'fx', k: 'ward', x: p.x, y: p.y }); return false;
     }
@@ -529,6 +608,8 @@ export class Game {
       if (p.venom > 0 && o.kind !== 'spell') { p.venom--; this.poison(d, F.has('toxicity') ? 4 : 3, F.has('toxicity') ? 6 : 4); }
       else if (this.relic === 'gland' && o.kind !== 'spell') this.poison(d, 1 + this.rl(), 3);
       else if (this.relic === 'ember' && o.kind !== 'spell' && d.hp > 0) { d.st.burn = Math.max(d.st.burn || 0, 3); d.st.burnDmg = Math.max(d.st.burnDmg || 0, this.rl()); }
+      // Serrated Edge: a cut that keeps bleeding
+      if (st.bleed && o.kind !== 'spell' && d.hp > 0) { d.st.bleed = Math.max(d.st.bleed || 0, 3); d.st.bleedDmg = Math.max(d.st.bleedDmg || 0, st.bleed); }
       // Frozen Tear: your hits slow, and from level 3 they freeze
       if (this.relic === 'tear' && o.kind !== 'spell' && d.hp > 0) {
         if (this.rl() >= 3) d.st.frozen = Math.max(d.st.frozen || 0, d.boss ? 1 : 2);
@@ -541,8 +622,8 @@ export class Game {
     if (!isP && p.hp > 0) {
       const on = ENEMIES[a.type].onHit;
       if (on === 'stun' && chance(0.15)) { p.st.stun = 1; this.say(t('lStunned'), 'bad'); }
-      if (on === 'poison') { p.st.poison = Math.max(p.st.poison || 0, 3); p.st.poisonDmg = 2 + Math.floor(this.floor / 3); }
-      if (on === 'burn') { p.st.burn = Math.max(p.st.burn || 0, 3); p.st.burnDmg = 2 + Math.floor(this.floor / 2); }
+      if (on === 'poison') { p.st.poison = Math.max(p.st.poison || 0, Math.max(1, 3 - (st.resist || 0))); p.st.poisonDmg = 2 + Math.floor(this.floor / 3); }
+      if (on === 'burn') { p.st.burn = Math.max(p.st.burn || 0, Math.max(1, 3 - (st.resist || 0))); p.st.burnDmg = 2 + Math.floor(this.floor / 2); }
       if (on === 'drain') { a.hp = Math.min(a.maxHp, a.hp + Math.ceil(n / 2)); }
     }
     return true;
@@ -554,6 +635,7 @@ export class Game {
     if (this.relic === 'crown') k *= 1 + 0.08 * this.rl();
     if (F.has('rage') && p.hp < st.maxHp / 2) k *= 1.5;
     if (F.has('executioner') && d.hp < d.maxHp * 0.3) k *= 1.6;
+    if (st.executioner && d.hp < d.maxHp * 0.3) k *= 1 + st.executioner;
     if (F.has('shatter') && (d.st.frozen > 0 || d.st.stun > 0)) k *= 1.6;
     if (F.has('virulence') && d.st.poison > 0) k *= 1.3;
     if (F.has('kindled') && d.st.burn > 0) k *= 1.5;
@@ -582,8 +664,13 @@ export class Game {
   }
 
   damage(d, n, crit, from) {
-    const p = this.player, F = this.flags();
+    const p = this.player, F = this.flags(), sp = this.ps();
     if (d === p) {
+      // Spiked Hide: whoever hits the hero pays for it
+      if (from && from !== 'poison' && from !== 'burn' && sp.thorns && from.hp > 0 && from.type !== 'player') {
+        this.say(t('lThorns', sp.thorns, this.ename(from)));
+        this.damage(from, sp.thorns, false, 'thorns');
+      }
       if (F.has('lastStand') && p.hp < this.ps().maxHp / 3) n = Math.max(1, Math.round(n * 0.8));
       if (p.st.sanctuary > 0) n = Math.max(1, Math.round(n * 0.65));
       const sh = p.st.shield || 0;
@@ -601,6 +688,9 @@ export class Game {
       const st = this.ps();
       if (p.hp <= 0 && F.has('unbreakable') && !p.flags.unbreakable) {
         p.flags.unbreakable = true; p.hp = 1; this.say(t('lUnbreakable'), 'good'); this.emit({ t: 'fx', k: 'ward', x: p.x, y: p.y });
+      }
+      if (p.hp <= 0 && sp.evade && (p.flags.evade || 0) < sp.evade) {
+        p.flags.evade = (p.flags.evade || 0) + 1; p.hp = 1; this.say(t('lEvade'), 'good'); this.emit({ t: 'fx', k: 'ward', x: p.x, y: p.y });
       }
       if (p.hp <= 0 && this.relic === 'phylactery' && (p.flags.revives || 0) < 1 + Math.floor(this.rl() / 2)) {
         p.flags.revives = (p.flags.revives || 0) + 1; p.hp = Math.round(st.maxHp / 2); this.say(t('lRelic'), 'good'); this.emit({ t: 'fx', k: 'level', x: p.x, y: p.y });
@@ -654,7 +744,7 @@ export class Game {
 
   gainXp(n) {
     const p = this.player;
-    p.xp += n;
+    p.xp += Math.round(n * (1 + (this.bonus.xp || 0)));
     while (p.xp >= this.xpToNext(p.lvl)) {
       p.xp -= this.xpToNext(p.lvl); p.lvl++; p.points++;
       if (p.pet) this.tunePet();
@@ -911,8 +1001,9 @@ export class Game {
         this.say(t('lBeartrap'), 'good');
         break;
     }
-    p.mp -= this.skillCost(id);
-    p.cds[id] = SKILLS[id].cd;
+    this.spend(id);
+    // Quick Hands: every cooldown is a turn shorter (never below one turn)
+    p.cds[id] = Math.max(1, SKILLS[id].cd - (this.bonus.swift || 0));
     this.usedSkill = id;
     this.emit({ t: 'skill', id });
     return true;
@@ -929,18 +1020,18 @@ export class Game {
       case 'heal':
         if (p.hp >= st.maxHp && !p.st.poison && !p.st.burn) return false;
         this.say(t('lDrink'));
-        this.heal(Math.max(15, Math.round(st.maxHp / 2)));
+        this.heal(Math.round(Math.max(15, Math.round(st.maxHp / 2)) * (1 + (this.bonus.potency || 0))));
         p.st.poison = 0; p.st.burn = 0;
         this.emit({ t: 'fx', k: 'potion', x: p.x, y: p.y });
         break;
       case 'greatHeal':
         this.say(t('lDrink'));
-        this.heal(st.maxHp); p.st.poison = 0; p.st.burn = 0;
+        this.heal(Math.round(st.maxHp * (1 + (this.bonus.potency || 0)))); p.st.poison = 0; p.st.burn = 0;
         this.emit({ t: 'fx', k: 'potion', x: p.x, y: p.y });
         break;
       case 'food':
         if (p.hp >= st.maxHp && !this.pets().length) return false;
-        this.heal(Math.round(st.maxHp / 4));
+        this.heal(Math.round(Math.round(st.maxHp / 4) * (1 + (this.bonus.potency || 0))));
         for (const pet of this.pets()) pet.hp = Math.min(pet.maxHp, pet.hp + Math.round(pet.maxHp / 3));
         break;
       case 'mana':

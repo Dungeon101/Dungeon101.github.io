@@ -1,6 +1,6 @@
 // Screens, HUD, overlays and input. Wires the rules (game.js) to the renderer and to saving.
 import { CLASSES, SKILLS, TALENTS, BRANCHES, ENEMIES, RELIC_MAX, RARITIES, UPGRADES, RELICS, CONSUMABLES, SLOT_ICON, HERO_NAMES, actOf, isBossFloor, FLOORS } from './data.js';
-import { Game, itemName, itemLines, itemScore, xpNext } from './game.js';
+import { Game, itemName, itemLines, itemScore, itemCompare, statLabel, statShort, xpNext } from './game.js';
 import { Renderer } from './render.js';
 import { path as findPath, walkable, DIRS, dist } from './dungeon.js';
 import { t, L, lang, setLang } from './i18n.js';
@@ -368,7 +368,9 @@ function closeOverlay() {
 }
 
 let invSel = null;
-// the bag: stacks show their count, gear shows a green corner when it beats what you wear
+// the bag: stacks show their count, gear shows a green corner when it beats what you wear.
+// The card on the right puts the item and the one you wear on the same rows, so the difference is
+// a number with an arrow, not two lists to compare in your head.
 function inventory() {
   const p = g.player, st = g.ps();
   const slot = (s) => {
@@ -382,12 +384,19 @@ function inventory() {
     const isEq = Object.values(p.equip).includes(sel), use = sel.slot === 'use';
     const cur = !use && !isEq ? p.equip[sel.slot] : null;
     const color = use ? CONSUMABLES[sel.kind].color : RARITIES[sel.rarity].color;
-    const diff = cur ? itemScore(sel) - itemScore(cur) : 0;
+    const rows = cur ? itemCompare(sel, cur) : [];
+    const ups = rows.filter((r) => r.d > 0).length, downs = rows.filter((r) => r.d < 0).length;
+    const verdict = !cur ? '' : ups && !downs ? `<span class="verdict up">${icon('arrow-up-right')} ${t('better')}</span>` : downs && !ups ? `<span class="verdict down">${icon('arrow-down-right')} ${t('worse')}</span>` : `<span class="verdict mix">${icon('arrow-right-left')} ${t('tradeoff')}</span>`;
     detail = `<div class="detail" style="--r:${color}">
-      <h3>${icon(use ? CONSUMABLES[sel.kind].icon : SLOT_ICON[sel.slot])} ${esc(itemName(sel))}${use && (sel.n || 1) > 1 ? ` <em class="x">×${sel.n}</em>` : ''}</h3>
-      <small>${use ? '' : `${L(RARITIES[sel.rarity].name)} · ${t(sel.slot)} · T${sel.tier}${cur ? ` · <b class="${diff >= 0 ? 'good' : 'bad'}">${diff >= 0 ? '+' : ''}${diff}</b>` : ''}`}</small>
-      <ul>${itemLines(sel).map((l) => `<li>${esc(l)}</li>`).join('')}</ul>
-      ${cur ? `<p class="muted">${t('equipped')}: ${esc(itemName(cur))}</p><ul class="cmp">${itemLines(cur).map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}
+      <div class="head">${icon(use ? CONSUMABLES[sel.kind].icon : SLOT_ICON[sel.slot])}
+        <div><h3>${esc(itemName(sel))}${use && (sel.n || 1) > 1 ? ` <em class="x">×${sel.n}</em>` : ''}</h3>
+        <small>${use ? L(CONSUMABLES[sel.kind].name) : `${L(RARITIES[sel.rarity].name)} · ${t(sel.slot)} · T${sel.tier}`}</small></div>
+        ${verdict}</div>
+      ${cur ? `<div class="cmphead"><span></span><span>${esc(itemName(sel))}</span><span>${t('equipped')}</span><span></span></div>
+      <div class="cmprows">${rows.map((r) => `<div class="cmprow ${r.d > 0 ? 'up' : r.d < 0 ? 'down' : ''}">
+        <span class="k">${icon(statShort(r.key))}${statLabel(r.key, Math.max(r.mine, r.theirs)).replace(String(Math.max(r.mine, r.theirs)), '')}</span>
+        <b>${r.mine}</b><b>${r.theirs}</b><span class="d">${r.d ? (r.d > 0 ? '+' : '') + r.d : ''}</span></div>`).join('')}</div>` : `<ul class="own">${itemLines(sel).map((l) => `<li>${esc(l)}</li>`).join('')}</ul>`}
+      ${cur && !rows.length ? `<ul class="own">${itemLines(sel).map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}
       <div class="actions">
         ${use ? `<button class="btn gold small" data-inv="use">${t('use')}</button>` : isEq ? '' : `<button class="btn gold small" data-inv="equip">${t('equip')}</button>`}
         ${isEq ? '' : `<button class="btn small" data-inv="drop">${t('drop')}</button>`}
@@ -398,13 +407,13 @@ function inventory() {
     <div class="stats"><span>${icon('heart')} ${p.hp}/${st.maxHp}</span><span>${icon('droplet')} ${p.mp}/${g.manaPool()}</span><span>${icon('shield')} ${st.ac}</span><span>${icon('target')} +${st.hit}</span><span>${icon('sword')} ${st.dmg[0] + st.power}-${st.dmg[1] + st.power}</span><span>${icon('coins')} ${p.gold}</span></div>
     <div class="pane"><div class="left">
     <h4>${t('equipped')}</h4><div class="slots">${['weapon', 'armor', 'trinket'].map(slot).join('')}</div>
-    <h4>${t('bag')} <small>${p.bag.length}/16</small></h4>
+    <h4>${t('bag')} <small>${p.bag.length}/${g.bagSize()}</small></h4>
     <div class="bag">${p.bag.map((it) => {
       const use = it.slot === 'use', col = use ? CONSUMABLES[it.kind].color : RARITIES[it.rarity].color;
       const better = !use && itemScore(it) > itemScore(p.equip[it.slot]);
       const n = it.n || 1;
       return `<button class="cell ${invSel === it.uid ? 'sel' : ''}" data-item="${it.uid}" style="--r:${col}" title="${esc(itemName(it))}">${icon(use ? CONSUMABLES[it.kind].icon : SLOT_ICON[it.slot])}${n > 1 ? `<em class="n">${n}</em>` : ''}${better ? '<i class="up"></i>' : ''}</button>`;
-    }).join('')}${Array.from({ length: Math.max(0, 16 - p.bag.length) }, () => '<span class="cell empty"></span>').join('')}</div>
+    }).join('')}${Array.from({ length: Math.max(0, g.bagSize() - p.bag.length) }, () => '<span class="cell empty"></span>').join('')}</div>
     </div><div class="right">${detail || `<p class="hint">${icon('hand-pointer')} ${t('invHint')}</p>`}</div></div>`);
 }
 
@@ -427,7 +436,9 @@ function shop() {
     <div class="actions"><button class="btn small" data-close="1">${t('back')}</button></div>`);
 }
 
-let talSel = null;
+let talSel = null, talPop = null; // talPop: where the little popup sits, in the panel's own coordinates
+// the talents: five branches side by side, ten levels running down each one. Clicking a node opens a
+// card right next to it, so the choice is made where the eye already is.
 function talents() {
   const p = g.player, tree = TALENTS[p.cls], names = BRANCHES[p.cls];
   const lvlOf = (n) => Number(n.id.slice(1).replace(/[ab]$/, ''));
@@ -435,27 +446,41 @@ function talents() {
   // a node is open when the level above in the same branch is bought, or when it is the first level
   const open = (n) => lvlOf(n) === 1 || tree[n.id.charCodeAt(0) - 65].some((x) => lvlOf(x) === lvlOf(n) - 1 && has(x));
   const spent = Object.values(p.talents).filter(Boolean).length;
-  const node = (n) => {
+  const node = (n, b, i) => {
     const state = has(n) ? 'has' : open(n) && p.points > 0 ? 'can' : open(n) ? 'open' : 'lock';
     const sk = Object.keys(n.eff || {}).find((k) => k.startsWith('skill:'));
-    return `<button class="node ${state} ${talSel === n.id ? 'sel' : ''}" data-tal="${n.id}" title="${esc(L(n.name))}">${icon(sk ? SKILLS[sk.slice(6)].icon : BRANCH_ICONS[p.cls][n.id.charCodeAt(0) - 65])}<span>${L(n.name)}</span></button>`;
+    return `<button class="node ${state} ${talSel === n.id ? 'sel' : ''}" data-tal="${n.id}" data-b="${b}" data-i="${i}" title="${esc(L(n.name))}">${icon(sk ? SKILLS[sk.slice(6)].icon : BRANCH_ICONS[p.cls][b])}<span>${L(n.name)}</span></button>`;
   };
   const sel = tree.flat().find((n) => n.id === talSel);
-  let detail = '';
+  let pop = '';
   if (sel) {
     const isOpen = open(sel), hasIt = has(sel);
-    detail = `<div class="detail"><h3>${L(sel.name)}</h3><p>${L(sel.desc)}</p>
-      <p class="muted">${L(names[sel.id.charCodeAt(0) - 65].name)} · ${t('talLevel', lvlOf(sel))}</p>
-      <div class="actions">${hasIt ? `<span class="muted">${icon('check')} ${t('learned')}</span>` : !isOpen ? `<span class="muted">${icon('lock')} ${t('locked')}</span>` : p.points <= 0 ? `<span class="muted">${t('needPoint')}</span>` : `<button class="btn gold small" data-learn="${sel.id}">${t('learn')}</button>`}</div></div>`;
+    pop = `<div class="tpop" style="left:${talPop?.x || 0}px; top:${talPop?.y || 0}px">
+      <h3>${L(sel.name)}</h3>
+      <p>${L(sel.desc)}</p>
+      <small class="muted">${L(names[sel.id.charCodeAt(0) - 65].name)} · ${t('talLevel', lvlOf(sel))}</small>
+      <div class="row">${hasIt ? `<span class="muted">${icon('check')} ${t('learned')}</span>` : !isOpen ? `<span class="muted">${icon('lock')} ${t('locked')}</span>` : p.points <= 0 ? `<span class="muted">${t('needPoint')}</span>` : `<button class="btn gold small" data-learn="${sel.id}">${icon('sparkles')} ${t('learn')}</button>`}</div>
+    </div>`;
   }
   openOverlay('tal', `
     <h2>${icon('sparkles')} ${t('talents')}</h2>
     <p class="points">${t('points', p.points)} <small class="muted">${t('talSpent', spent)}</small></p>
     <div class="branches">${tree.map((br, b) => `<div class="branch">
       <h4>${icon(BRANCH_ICONS[p.cls][b])} ${L(names[b].name)}</h4>
-      <div class="levels">${Array.from({ length: 10 }, (_, i) => `<div class="lvl"><i>${i + 1}</i>${br.filter((n) => lvlOf(n) === i + 1).map(node).join('')}</div>`).join('')}</div>
+      <div class="levels">${Array.from({ length: 10 }, (_, i) => `<div class="lvl"><i>${i + 1}</i>${br.filter((n) => lvlOf(n) === i + 1).map((n, j) => node(n, b, i + '-' + j)).join('')}</div>`).join('')}</div>
     </div>`).join('')}</div>
-    ${detail}`);
+    ${pop}`);
+  if (talSel && talPop) {
+    const node = document.querySelector(`[data-tal="${talSel}"]`), panel = $('#overlay .panel'), popEl = $('#overlay .tpop');
+    if (node && popEl) {
+      const n = node.getBoundingClientRect(), pn = panel.getBoundingClientRect();
+      const w = popEl.offsetWidth, h = popEl.offsetHeight;
+      let x = n.right - pn.left + 8, y = n.top - pn.top + panel.scrollTop;
+      if (x + w > panel.clientWidth - 8) x = Math.max(8, n.left - pn.left - w - 8);
+      if (y + h > panel.scrollTop + panel.clientHeight - 8) y = Math.max(panel.scrollTop + 8, y - (y + h - panel.scrollTop - panel.clientHeight + 8));
+      popEl.style.left = `${x}px`; popEl.style.top = `${y}px`;
+    }
+  }
 }
 
 function pauseMenu() {
@@ -518,7 +543,7 @@ document.addEventListener('click', async (ev) => {
     else if (a === 'use') { overlay = null; $('#overlay').className = 'overlay'; invSel = null; act({ type: 'use', uid }); }
     return;
   }
-  if (el.dataset.tal) { talSel = el.dataset.tal; talents(); return; }
+  if (el.dataset.tal) { talSel = el.dataset.tal; talPop = { x: 0, y: 0 }; talents(); return; }
   if (el.dataset.buy) { if (g && g.buy(Number(el.dataset.buy))) { sfx('pickup'); saveRun(g); } if (overlay === 'shop') shop(); return; }
   if (el.dataset.sell) { if (g.sell(Number(el.dataset.sell))) { sfx('pickup'); saveRun(g); } shop(); return; }
   if (el.dataset.learn) { if (g.learn(el.dataset.learn)) { sfx('level'); saveRun(g); } talents(); return; }
