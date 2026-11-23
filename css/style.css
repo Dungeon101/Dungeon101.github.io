@@ -409,3 +409,39 @@ tr.win td { color: var(--gold); }
 .cmprow.down { background: rgba(255, 107, 91, 0.1); }
 .cmprow.down .d { color: #ff6b5b; }
 .detail ul.own { margin: 4px 0 0; }
+
+/* talenti: due scelte per livello sulla stessa riga; i rami chiusi si spengono, quelli scelti si accendono */
+.talbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 2px 0 4px; }
+.talbar .points { margin: 0; }
+.specs { display: flex; gap: 6px; flex-wrap: wrap; }
+.specs em { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-style: normal; font-size: 11px; font-weight: 700; color: var(--gold); background: rgba(214, 168, 92, 0.12); border: 1px solid rgba(214, 168, 92, 0.35); }
+.specs em .ico { width: 12px; height: 12px; }
+.talhint { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; font-size: 12px; color: var(--muted); }
+.talhint .ico { width: 14px; height: 14px; }
+.talhint.first { color: var(--gold); }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.pair .node { padding: 6px 3px; font-size: 9.5px; }
+.pair .node span { max-width: 100%; font-size: 9.5px; }
+.pair .node .ico { width: 15px; height: 15px; }
+.branch .tick { margin-left: auto; color: var(--gold); display: inline-flex; }
+.branch .tick .ico { width: 12px; height: 12px; }
+.branch.shut { opacity: 0.45; }
+.branch.mine { border-color: rgba(214, 168, 92, 0.4); background: rgba(214, 168, 92, 0.05); }
+.node.taken { opacity: 0.4; border-style: dashed; }
+.node.closed { opacity: 0.35; }
+
+/* santuario a scaffali: cinque ripiani, ognuno si apre quando serve */
+.tabs.shelves { justify-content: center; flex-wrap: wrap; margin-bottom: 12px; }
+.tabs.shelves .chip { display: inline-flex; align-items: center; gap: 5px; }
+.tabs.shelves .chip .ico { width: 13px; height: 13px; }
+.shelf { margin-bottom: 8px; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.06); background: rgba(0, 0, 0, 0.18); }
+.shelf.open { border-color: rgba(255, 140, 60, 0.25); background: rgba(0, 0, 0, 0.3); }
+.shelfhead { width: 100%; box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 12px 14px; background: none; border: 0; color: var(--text); font: inherit; cursor: pointer; text-align: left; }
+.shelfhead:hover { background: rgba(255, 255, 255, 0.03); }
+.shelfhead .ico { width: 16px; height: 16px; color: var(--ember); }
+.shelfhead b { font-size: 14px; }
+.shelfhead small { color: var(--muted); font-size: 11.5px; }
+.shelfhead .ico:last-child { margin-left: auto; color: var(--muted); }
+.shelf .upgrades { padding: 4px 12px 12px; }
+.card.up.can { border-color: rgba(255, 211, 107, 0.35); }
+.card.up h3 .lv { font-style: normal; font-size: 11px; color: var(--gold); margin-left: 4px; }

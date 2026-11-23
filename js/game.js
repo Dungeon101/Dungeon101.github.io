@@ -57,9 +57,13 @@ export function itemCompare(mine, theirs) {
 export const statLabel = (k, v) => (MODS[k] ? MODS[k][lang].replace('{0}', v) : `${k} ${v}`);
 export const statShort = (k) => ({ power: 'sword', ac: 'shield', hp: 'heart', hit: 'target', crit: 'sparkles', regen: 'heart-pulse', steal: 'droplet', gold: 'coins', light: 'flame', pool: 'droplet', manaRegen: 'waves', thorns: 'shield-exclamation-point', dodge: 'wind', xp: 'sparkles' }[k] || 'circle');
 
+export const SPEC_MAX = 2;   // specialisations: one at the start, the second from level 10
+export const SPEC_LVL = 10;  // the level the second one unlocks at
+
 export class Game {
   constructor(data) {
     Object.assign(this, data);
+    if (!this.player.spec) this.player.spec = [];   // a save from before specialisations
     this.ev = [];
     if (this.map && !(this.map.t instanceof Uint8Array)) { // restored from a save
       const s = this.map.packed; delete this.map.packed;
@@ -75,7 +79,7 @@ export class Game {
     const up = (id) => meta.upgrades?.[id] || 0;
     const player = {
       id: 1, kind: 'player', cls, name, x: 0, y: 0, hp: 1, mp: 0, xp: 0, lvl: 1, points: 1 + up('insight'), talents: {}, cds: {}, st: {},
-      equip: { weapon: null, armor: null, trinket: null }, bag: [], gold: 0, flags: {}, venom: 0, pet: 0,
+      equip: { weapon: null, armor: null, trinket: null }, bag: [], gold: 0, flags: {}, venom: 0, pet: 0, spec: [],
     };
     const g = new Game({
       floor: 0, turn: 0, uid: 2, player, enemies: [], items: [], chests: [], hazards: [], fountain: null, merchant: null, stairsOpen: true, log: [], over: null, killer: null,
@@ -755,11 +759,30 @@ export class Game {
     }
   }
 
+  // which branches of the tree are open: one to begin with, a second one from level 10.
+  // A branch is open once picked, and stays open even when the other one is being filled.
+  branchOpen(b) { const p = this.player; return (p.spec || []).includes(b); }
+  specFull() { const p = this.player; return p.spec.length >= SPEC_MAX; }
+  pickSpec(b) {
+    const p = this.player;
+    if (p.spec.includes(b) || p.spec.length >= SPEC_MAX) return false;
+    p.spec.push(b);
+    this.recompute();
+    return true;
+  }
+  // the first level of a branch is the specialisation: picking it counts as opening the branch
   learn(id) { // talent: costs a point, needs the level above in the same branch
     const p = this.player, lvl = Number(id.slice(1).replace(/[ab]$/, '')), letter = id[0];
-    const branch = TALENTS[p.cls][letter.charCodeAt(0) - 65] || [];
+    const bi = letter.charCodeAt(0) - 65, branch = TALENTS[p.cls][bi] || [];
     const above = lvl === 1 || branch.some((n) => n.id !== id && Number(n.id.slice(1).replace(/[ab]$/, '')) === lvl - 1 && p.talents[n.id]);
+    const opened = this.branchOpen(bi);
     if (p.points <= 0 || p.talents[id] || !above) return false;
+    if (!opened) {
+      if (lvl !== 1 || this.specFull()) return false;
+      p.spec.push(bi);
+    }
+    // two choices on the same level: taking one closes the other for good
+    if (branch.some((n) => n.id === id + 'b' && p.talents[n.id])) return false;
     const before = this.ps().maxHp;
     p.points--; p.talents[id] = 1;
     p.hp += Math.max(0, this.ps().maxHp - before);
