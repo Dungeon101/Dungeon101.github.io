@@ -36,12 +36,20 @@ function show(id) {
 }
 
 function renderTitle() {
-  const saved = loadRun();
+  const saved = loadRun(), st = meta.stats || {};
+  const bought = UPGRADES.filter((u) => (meta.upgrades[u.id] || 0) > 0).length;
+  const relics = Object.values(meta.relics || {}).filter((l) => l > 0).length;
   $('#s-title .menu').innerHTML = `
     ${saved ? `<button class="btn gold" data-go="continue">${icon('play')}<span>${t('continue')}</span><small>${esc(saved.player?.name || '')} · ${t('floor', saved.floor)}</small></button>` : ''}
-    <button class="btn ${saved ? '' : 'gold'}" data-go="new">${icon('swords')}<span>${t('newRun')}</span></button>
+    <button class="btn ${saved ? '' : 'gold'}" data-go="new">${icon('swords')}<span>${t('newRun')}</span><small>${t('titleClasses', Object.keys(CLASSES).length)}</small></button>
     <button class="btn" data-go="sanctuary">${icon('flame')}<span>${t('sanctuary')}</span><small>${meta.embers} ${t('embers').toLowerCase()}</small></button>
-    <button class="btn" data-go="hall">${icon('trophy')}<span>${t('hall')}</span></button>`;
+    <button class="btn" data-go="hall">${icon('trophy')}<span>${t('hall')}</span></button>
+    ${st.runs ? `<div class="titleprogress">
+      <span>${icon('skull')} ${t('titleRuns', st.runs)}</span>
+      <span>${icon('arrow-down-to-line')} ${t('titleBest', st.best || 0, FLOORS)}</span>
+      <span>${icon('flame')} ${t('titleUpgrades', bought, UPGRADES.length)}</span>
+      <span>${icon('gem')} ${t('titleRelics', relics, Object.keys(RELICS).length)}</span>
+      ${st.wins ? `<span class="won">${icon('crown')} ${t('titleWins', st.wins)}</span>` : ''}</div>` : `<p class="firsthint">${icon('hand-pointer')} ${t('titleFirst')}</p>`}`;
   $('#s-title .tagline').textContent = t('tagline');
   renderAccount();
   renderToggles();
@@ -203,10 +211,16 @@ function after() {
   hud();
 }
 
+// how far a run got, so the end screen can say "your best" and not just a number
+function bestSoFar(before) {
+  const st = before?.stats || {};
+  return { floor: st.best || 0, score: st.bestScore || 0, runs: st.runs || 0 };
+}
 function endRun() {
   if (endShown) return;
   endShown = true;
   clearRun();
+  const before = JSON.parse(JSON.stringify(meta));   // to compare the run with the record it may have beaten
   const res = finishRun(meta, g);
   saveMeta(meta);
   pushMeta();
@@ -214,18 +228,57 @@ function endRun() {
   hud();
   setTimeout(() => {
     if (res.win) sfx('win');
-    const s = g.stats;
+    const s = g.stats, p = g.player, c = CLASSES[p.cls];
+    const rec = bestSoFar(before);
+    const record = res.win || g.floor > rec.floor;
+    const best = Math.max(rec.score, res.score) === res.score;
+    // what the run gave you, in the order it matters
+    const gifts = [];
+    if (res.newRelics.length) gifts.push(`${icon('gem')} ${t('endRelics', res.newRelics.map((id) => L(RELICS[id].name)).join(', '))}`);
+    if (meta.upgrades.heirloom) { const it = meta.vault || null; if (it) gifts.push(`${icon(SLOT_ICON[it.slot])} ${t('endVault', esc(itemName(it)))}`); }
+    const bosses = s.bosses.length;
+    // where the run stood: the pips of the nine acts, with the one it reached lit
+    const act = actOf(g.floor);
+    const pips = Array.from({ length: FLOORS }, (_, i) => {
+      const f = i + 1, a = actOf(f);
+      return `<i class="${f <= g.floor ? 'on' : ''} ${f === g.floor ? 'here' : ''} ${isBossFloor(f) ? 'boss' : ''}" title="${esc(L(a.name))} · ${t('floorOf', f, FLOORS)}"></i>`;
+    }).join('');
     openOverlay('end', `
       <div class="end ${res.win ? 'win' : ''}">
         <img class="art" src="assets/img/${res.win ? 'victory' : 'death'}.webp" alt="">
         <h2>${t(res.win ? 'victory' : 'youDied')}</h2>
-        <p>${res.win ? t('winText') : esc(t('slainBy', byName(g.killer), g.floor))}</p>
-        <div class="lifetime"><span><b>${g.floor}</b>${t('statFloor')}</span><span><b>${g.player.lvl}</b>${t('statLevel')}</span><span><b>${s.kills}</b>${t('statKills')}</span><span><b>${s.gold}</b>${t('statGold')}</span><span><b>${res.score}</b>${t('statScore')}</span></div>
-        <p class="embers">${icon('flame')} ${t('embersEarned', res.embers)}</p>
-        ${res.newRelics.map((id) => `<p class="relic-new">${icon(RELICS[id].icon)} ${t('newRelic', L(RELICS[id].name))}</p>`).join('')}
+        <p class="sub">${res.win ? t('winText') : esc(t('slainBy', byName(g.killer), g.floor))}</p>
+        <div class="endhead">${icon('shield-half')}
+          <span>${esc(p.name)} · ${L(c.name)} · ${t('level', p.lvl)}</span>
+          ${record && !res.win ? `<em class="badge">${icon('crown')} ${t('endRecord')}</em>` : ''}
+          ${best ? `<em class="badge gold">${icon('trophy')} ${t('endBest')}</em>` : ''}</div>
+        <div class="pips acts">${pips}</div>
+        <p class="endact">${icon('compass')} ${L(act.name)} · ${t('floorOf', g.floor, FLOORS)}${bosses ? ` · ${icon('skull')} ${t('endBosses', bosses)}` : ''}</p>
+        <div class="lifetime">
+          <span><b>${g.floor}</b>${t('statFloor')}<small>${t('endOf', FLOORS)}</small></span>
+          <span><b>${p.lvl}</b>${t('statLevel')}</span>
+          <span><b>${s.kills}</b>${t('statKills')}</span>
+          <span><b>${s.gold}</b>${t('statGold')}</span>
+          <span><b>${res.score}</b>${t('statScore')}<small>${t('endBestOf', rec.score)}</small></span>
+        </div>
+        <p class="embers">${icon('flame')} ${t('embersEarned', res.embers)} <small>${t('endEmbersTotal', meta.embers)}</small></p>
+        ${gifts.map((g2) => `<p class="relic-new">${g2}</p>`).join('')}
+        ${meta.embers >= cheapestUpgrade() ? `<p class="muted">${icon('flame')} ${t('endCanBuy', cheapestUpgrade())}</p>` : ''}
         <div class="actions"><button class="btn" data-go="title">${t('menu')}</button><button class="btn" data-go="sanctuary">${icon('flame')}<span>${t('toSanctuary')}</span></button><button class="btn gold" data-go="new">${icon('swords')}<span>${t('again')}</span></button></div>
       </div>`, true);
   }, res.win ? 2400 : 1700);
+}
+
+// the cheapest thing in the Sanctuary you could afford right now, or 0
+function cheapestUpgrade() {
+  let min = 0;
+  for (const u of UPGRADES) {
+    const l = meta.upgrades[u.id] || 0;
+    if (l >= u.max) continue;
+    const c = u.cost[l];
+    if (c <= meta.embers && (!min || c < min)) min = c;
+  }
+  return min;
 }
 
 // Italian: "da" + article becomes "dal", "dalla", "dall'"

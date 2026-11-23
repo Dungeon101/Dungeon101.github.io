@@ -4,7 +4,7 @@ Quello che serve per ripartire senza rileggere il codice. Il README dice cosa fa
 
 ## Dove siamo (23/11/2026)
 
-- Branch **`feat/piu-piani-piu-classi`**, staccato da `main` di proposito: **non si fa il merge** finché Davide non lo chiede. Otto commit, da `b20171e` a `dcd62c8`.
+- Branch **`feat/piu-piani-piu-classi`**: il lavoro del 23/11 (da `b20171e` in poi) e il 24/11 la schermata di fine partita, il titolo e la documentazione. Va in `main` quando Davide dice di sì.
 - Il gioco è passato da **9 piani / 3 classi** a **27 piani in 9 atti / 6 classi**, con talenti, mana, mercante, reliquie a livelli e Santuario a 50 potenziamenti.
 - Selftest ok, bot su 6 classi: piano medio 4,7–9,3, **zero vittorie**. È voluto: la difficoltà è tarata perché la prima partita non si vinca.
 - Niente è pubblicato: `main` è ancora la versione a 9 piani. Per pubblicare serve unire il branch (o farlo vedere in locale, sotto).
@@ -24,7 +24,7 @@ node bot.mjs 20                     # solo bilanciamento: piano medio e morti pe
 window.d101.startRun(window.d101.Game.create({ cls: 'warrior', name: 'Prova', meta: {} }))
 ```
 
-Screenshot di prova: `$TMPDIR/shot2.mjs` (Playwright, talenti e inventario), `shot3/4` (Santuario), `shot6/8` (HUD e pausa), `shot9` (telefono a 390 px). Il server di prova è `http://127.0.0.1:65470`.
+Screenshot di prova: `$TMPDIR/shot2.mjs` (Playwright, talenti e inventario), `shot3/4` (Santuario), `shot6/8` (HUD e pausa), `shot9` (telefono a 390 px), `shot10` (fine partita: si forza `g.over='dead'` e si spinge un evento `level` in `g.ev` chiamando `d101.after()`), `shot11` (titolo al primo avvio e con progressi). Il server di prova è `http://127.0.0.1:65470`.
 
 ## Mappa del codice
 
@@ -73,11 +73,16 @@ Screenshot di prova: `$TMPDIR/shot2.mjs` (Playwright, talenti e inventario), `sh
 | `4fd9612` 17:26 | **50 potenziamenti** del Santuario a 5 livelli, tutti collegati al motore; talenti affiancati col popup; confronto oggetti a righe |
 | `9f2d80f` 17:46 | **specializzazioni** (una all'inizio, la seconda al 10), due scelte per livello con l'altra che si disabilita, Santuario a cinque ripiani, **23 icone mancanti** aggiunte |
 | `dcd62c8` 17:54 | interfaccia di gioco: barra abilità leggibile, minimappa cliccabile, mappa con nemici e legenda, pausa con statistiche e scorciatoie, ritocchi per il telefono |
+| `9428cb4` 23/11 sera | `docs/APPUNTI.md` (questo file) e README allineato al gioco a 27 piani |
+
+## Fatto il 24/11
+
+- **Schermata di fine partita** (`endRun()` in `main.js`): chi eri (eroe, classe, livello), i **27 piani come barre** con i boss più alti e quello raggiunto acceso, l'atto e i boss abbattuti, le statistiche con "di 27" e "migliore N" accanto ai punti, le braci guadagnate e il totale nel Santuario, le reliquie salite e l'oggetto messo nella cripta di famiglia, le etichette **Nuovo record** e **Punteggio migliore di sempre** (confrontate con il `meta` di prima della partita), e l'avviso se nel Santuario c'è qualcosa che puoi già comprare (`cheapestUpgrade()`).
+- **Titolo**: la tagline dice 27 piani, nove tiranni, sei eroi; sotto "Nuova partita" il numero di eroi; se hai già giocato, una riga di progressi (partite, piano migliore su 27, potenziamenti comprati su 50, reliquie su 15, vittorie); al primo avvio un suggerimento su come funziona il ciclo morte → braci → Santuario.
+- Meta e `og:description` di `index.html` aggiornati (erano ancora a nove piani).
 
 ## Cosa resta
 
-1. **Schermata di fine partita e primo avvio**: sono il punto in cui un giocatore nuovo decide se restare. Non ancora toccate.
-2. **Bilanciamento**: la Maga (4,8 di piano medio) e il Cacciatore (4,7) sono indietro rispetto al Paladino (9,3). Il bot però non usa cure, scudi né il lupo, quindi le classi di supporto risultano più deboli di quanto siano in mano a una persona. Da guardare prima con il bot corretto, non con i numeri grezzi.
-3. **`Cimelio`** (potenziamento del Santuario) ha effetto solo se il Santuario passa l'oggetto alla partita: da verificare end to end.
-4. **README**: aggiornato a 27 piani, 9 atti, 6 classi, 50 potenziamenti. Va riletto quando il branch entra in `main`.
-5. Pubblicare: unire il branch su `main` (e rifare gli screenshot sul sito, `davide-mariotti.github.io/apps/dungeon101/`, se cambia qualcosa di visibile).
+1. **Bilanciamento**: la Maga (4,8 di piano medio) e il Cacciatore (4,7) sono indietro rispetto al Paladino (9,3). Il bot però non usa cure, scudi né il lupo, quindi le classi di supporto risultano più deboli di quanto siano in mano a una persona. Da guardare prima con il bot corretto, non con i numeri grezzi.
+2. **`Cimelio`** (potenziamento del Santuario) ha effetto solo se il Santuario passa l'oggetto alla partita: da verificare end to end.
+3. **Sito**: la pagina `/apps/dungeon101/` di `davide-mariotti.github.io` e gli screenshot vanno rifatti dopo il merge, perché parlano ancora di nove piani e tre classi.

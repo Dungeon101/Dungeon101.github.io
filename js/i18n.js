@@ -1,7 +1,8 @@
 // UI strings in English and Italian. The language follows the browser, the player can switch it from the menu.
 const STR = {
   en: {
-    tagline: 'Nine floors. Three tyrants. One torch.',
+    tagline: 'Twenty-seven floors. Nine tyrants. Six heroes. One torch.',
+    titleClasses: '{0} heroes', titleRuns: '{0} runs', titleBest: 'best floor {0} of {1}', titleUpgrades: '{0} of {1} upgrades', titleRelics: '{0} of {1} relics', titleWins: '{0} won', titleFirst: 'First time here? Pick a hero, die a lot, and spend what you keep in the Sanctuary.',
     continue: 'Continue run', newRun: 'New run', sanctuary: 'Sanctuary', hall: 'Hall of Fame', back: 'Back',
     signIn: 'Sign in with Google', signOut: 'Sign out', signedAs: 'Synced as {0}', offline: 'Progress is saved in this browser.',
     cloudOff: 'Cloud unavailable right now. Your progress is safe in this browser.',
@@ -21,6 +22,7 @@ const STR = {
     cooldown: '{0} turns', ready: 'Ready', range: 'Range {0}', cd: 'Cooldown {0}',
     youDied: 'You died', victory: 'Victory', slainBy: 'Slain by {0} on floor {1}.', winText: 'The Ashen Lich is no more. The surface sees the sun again.',
     embersEarned: '+{0} embers', newRelic: 'New relic unlocked: {0}', relicNext: 'Level {0}: {1}', toSanctuary: 'Go to the Sanctuary', again: 'New run', menu: 'Main menu',
+    endRelics: 'Relic up: {0}', endVault: 'In the vault: {0}', endRecord: 'New record', endBest: 'Best score yet', endBosses: '{0} bosses down', endOf: 'of {0}', endBestOf: 'best {0}', endEmbersTotal: '{0} embers in the Sanctuary', endCanBuy: 'You can buy something for {0} embers',
     statFloor: 'Floor', statKills: 'Kills', statGold: 'Gold', statTurns: 'Turns', statScore: 'Score', statLevel: 'Level',
     embers: 'Embers', buy: 'Buy', maxed: 'Max', relics: 'Relics', relicLocked: 'Defeat {0} to unlock it.',
     lifetime: 'Lifetime', runs: 'Runs', bestFloor: 'Best floor', wins: 'Wins', totalKills: 'Kills',
@@ -50,7 +52,8 @@ const STR = {
     lRelic: 'Phylactery! You rise again.',
   },
   it: {
-    tagline: 'Nove piani. Tre tiranni. Una torcia.',
+    tagline: 'Ventisette piani. Nove tiranni. Sei eroi. Una torcia.',
+    titleClasses: '{0} eroi', titleRuns: '{0} partite', titleBest: 'piano migliore {0} di {1}', titleUpgrades: '{0} su {1} potenziamenti', titleRelics: '{0} su {1} reliquie', titleWins: '{0} vinte', titleFirst: 'Prima volta? Scegli un eroe, muori un bel po\u2019, e spendi nel Santuario quello che tieni.',
     continue: 'Continua la partita', newRun: 'Nuova partita', sanctuary: 'Santuario', hall: 'Albo d\'onore', back: 'Indietro',
     signIn: 'Accedi con Google', signOut: 'Esci', signedAs: 'Sincronizzato come {0}', offline: 'I progressi restano in questo browser.',
     cloudOff: 'Il cloud non risponde. I progressi sono al sicuro in questo browser.',
@@ -70,6 +73,7 @@ const STR = {
     cooldown: '{0} turni', ready: 'Pronta', range: 'Gittata {0}', cd: 'Ricarica {0}',
     youDied: 'Sei morto', victory: 'Vittoria', slainBy: 'Ucciso da{0} al piano {1}.', winText: 'Il Lich di Cenere non c\'è più. La superficie rivede il sole.',
     embersEarned: '+{0} braci', newRelic: 'Nuova reliquia: {0}', relicNext: 'Livello {0}: {1}', toSanctuary: 'Vai al Santuario', again: 'Nuova partita', menu: 'Menu principale',
+    endRelics: 'Reliquia salita: {0}', endVault: 'Nella cripta di famiglia: {0}', endRecord: 'Nuovo record', endBest: 'Punteggio migliore di sempre', endBosses: '{0} boss abbattuti', endOf: 'di {0}', endBestOf: 'migliore {0}', endEmbersTotal: '{0} braci nel Santuario', endCanBuy: 'Nel Santuario puoi comprare qualcosa a {0} braci',
     statFloor: 'Piano', statKills: 'Uccisioni', statGold: 'Oro', statTurns: 'Turni', statScore: 'Punti', statLevel: 'Livello',
     embers: 'Braci', buy: 'Compra', maxed: 'Al massimo', relics: 'Reliquie', relicLocked: 'Sconfiggi {0} per sbloccarla.',
     lifetime: 'In totale', runs: 'Partite', bestFloor: 'Piano migliore', wins: 'Vittorie', totalKills: 'Uccisioni',
