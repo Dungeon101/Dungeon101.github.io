@@ -76,7 +76,7 @@ export function ambient(act) {
   const c = ctx(); if (!c) return;
   if (drone) { drone.g.gain.setTargetAtTime(0, c.currentTime, 0.5); const old = drone; setTimeout(() => old.o.forEach((o) => o.stop()), 2000); drone = null; }
   if (!act) return;
-  const notes = { crypt: [55, 82.4], caves: [61.7, 92.5], abyss: [49, 73.4] }[act];
+  const notes = { crypt: [55, 82.4], caves: [61.7, 92.5], abyss: [49, 73.4], forge: [46.2, 69.3], cathedral: [65.4, 98], throne: [43.7, 65.4], cistern: [41.2, 61.7], kiln: [38.9, 58.3], door: [36.7, 55] }[act] || [55, 82.4];
   const g = c.createGain(); g.gain.value = 0; g.connect(master);
   const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 380; lp.connect(g);
   const o = notes.map((f, i) => { const x = c.createOscillator(); x.type = i ? 'triangle' : 'sawtooth'; x.frequency.value = f; x.detune.value = i * 6; x.connect(lp); x.start(); return x; });

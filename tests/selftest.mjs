@@ -2,18 +2,31 @@
 // Checks the floor generator and plays whole runs with a simple bot: no exceptions, saves that survive a round trip,
 // and a rough balance report (how deep each class gets).
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import { generate, distanceMap, walkable, canStep, DIRS, dist } from '../js/dungeon.js';
-import { Game, itemScore } from '../js/game.js';
-import { CLASSES, TALENTS, SKILLS } from '../js/data.js';
+import { Game, itemScore, STAT_KEYS, FLAGS } from '../js/game.js';
+import { CLASSES, TALENTS, BRANCHES, SKILLS, FLOORS, ACTS, ENEMIES, RELICS, isBossFloor, actIndex } from '../js/data.js';
 
 // 1. floors: start and stairs reachable, every walkable tile connected
-for (let f = 1; f <= 9; f++) for (let i = 0; i < 40; i++) {
+for (let f = 1; f <= FLOORS; f++) for (let i = 0; i < 40; i++) {
   const m = generate(f);
   const d = distanceMap(m, m.start.x, m.start.y);
   assert.ok(d[m.stairs.y * m.w + m.stairs.x] > 0, `floor ${f}: stairs unreachable`);
   for (let k = 0; k < m.t.length; k++) if (m.t[k] === 1 || m.t[k] === 3) assert.ok(d[k] >= 0, `floor ${f}: isolated tile`);
 }
 console.log('floors ok');
+
+// every act must be playable: a bestiary, a boss that exists, a relic to unlock from it, and a boss floor at its end
+for (const [i, act] of ACTS.entries()) {
+  assert.ok(act.pool.length >= 3, `act ${act.id}: bestiary too small`);
+  for (const k of act.pool) assert.ok(ENEMIES[k], `act ${act.id}: enemy ${k} does not exist`);
+  assert.ok(ENEMIES[act.boss]?.boss, `act ${act.id}: boss ${act.boss} is not a boss`);
+  assert.ok(Object.values(RELICS).some((r) => r.boss === act.boss), `act ${act.id}: no relic from ${act.boss}`);
+  assert.ok(isBossFloor((i + 1) * 3), `act ${act.id}: its last floor is not a boss floor`);
+  assert.equal(actIndex((i + 1) * 3 - 1), i, `act ${act.id}: floors do not line up`);
+}
+assert.equal(actIndex(FLOORS), ACTS.length - 1, 'the last floor belongs to the last act');
+console.log(`${FLOORS} floors in ${ACTS.length} acts ok`);
 
 // 2. local and cloud progress merge: more lifetime embers wins, relics and records add up
 {
@@ -30,7 +43,7 @@ console.log('floors ok');
 }
 
 // 3. bot runs
-const order = ['B1', 'C1', 'A1', 'B2', 'A2', 'C2', 'B3', 'A3', 'C3'];
+const order = ['B1', 'C1', 'A1', 'B2', 'A2', 'C2', 'B3', 'A3', 'C3', 'B4', 'A4', 'C4'];
 const dropped = new WeakSet(); // the bot does not go back for what it threw away
 function botTurn(g) {
   const p = g.player, m = g.map, st = g.ps();
@@ -39,7 +52,7 @@ function botTurn(g) {
   for (const it of p.bag.filter((x) => x.slot !== 'use').sort((a, b) => itemScore(a) - itemScore(b)).slice(0, Math.max(0, p.bag.length - 12))) { dropped.add(it); g.drop(it.uid); }
   if (p.hp < st.maxHp * 0.4 && p.bag.some((x) => x.kind === 'heal')) return g.quickPotion();
   if (g.onStairs()) return g.act({ type: 'descend' });
-  const foes = g.visibleEnemies().sort((a, b) => dist(a, p) - dist(b, p));
+  const foes = g.visibleEnemies().filter((e) => !e.ally).sort((a, b) => dist(a, p) - dist(b, p));
   // step out of telegraphed tiles
   if (g.hazards.some((h) => h.x === p.x && h.y === p.y)) {
     for (const [dx, dy] of DIRS) if (!g.hazards.some((h) => h.x === p.x + dx && h.y === p.y + dy) && g.act({ type: 'move', dx, dy })) return true;
@@ -48,7 +61,7 @@ function botTurn(g) {
     for (const id of g.skills()) {
       if ((p.cds[id] || 0) > 0) continue;
       const sk = SKILLS[id];
-      if (id === 'blink' || id === 'smoke') continue;
+      if (id === 'blink' || id === 'smoke' || id === 'mend' || id === 'beast') continue;
       if (!sk.target) { if (g.act({ type: 'skill', id })) return true; continue; }
       const tg = g.targets(id)[0];
       if (tg && g.act({ type: 'skill', id, x: tg.x, y: tg.y })) return true;
@@ -74,6 +87,7 @@ function botTurn(g) {
   let best = null, bv = back[p.y * m.w + p.x];
   for (const [dx, dy] of DIRS) { const v = back[(p.y + dy) * m.w + p.x + dx]; if (v >= 0 && v < bv && canStep(m, p.x, p.y, dx, dy)) { bv = v; best = [dx, dy]; } }
   if (best && g.act({ type: 'move', dx: best[0], dy: best[1] })) return true;
+  if (dropped.size < 12 && g.items.length) { for (const o of g.items) dropped.add(o.it); return true; }
   return g.act({ type: 'wait' });
 }
 
@@ -102,6 +116,52 @@ for (const cls of Object.keys(CLASSES)) {
   const avg = floors.reduce((a, b) => a + b, 0) / runs;
   console.log(`${cls.padEnd(8)} avg floor ${avg.toFixed(1)}  wins ${wins}/${runs}  avg level ${(lv / runs).toFixed(1)}  deaths ${JSON.stringify(causes)}`);
 }
-// talents are all reachable
-for (const c of Object.keys(TALENTS)) assert.equal(TALENTS[c].flat().length, 9);
+// every class has five branches, ten levels deep, with two or three nodes to choose from on each level,
+// and every node either does something or teaches a skill that exists
+const depths = new Set();
+for (const c of Object.keys(TALENTS)) {
+  assert.equal(TALENTS[c].length, 5, `${c}: five branches`);
+  assert.equal(BRANCHES[c].length, 5, `${c}: a name and an icon per branch`);
+  depths.add(TALENTS[c][0].length);
+  for (const b of TALENTS[c]) {
+    assert.equal(b.length, TALENTS[c][0].length, `${c}: branches of different depth`);
+    assert.deepEqual([...new Set(b.map((n) => n.id[0]))], [b[0].id[0]], `${c}: one letter per branch`);
+    assert(/^[A-E](10|[1-9])[ab]?$/.test(b[0].id), `${c}: odd node id ${b[0].id}`);
+    for (let l = 1; l <= 10; l++) {
+      const row = b.filter((n) => Number(n.id.slice(1).replace(/[ab]$/, '')) === l);
+      assert(row.length >= 2 && row.length <= 3, `${c} ${b[0].id[0]}${l}: ${row.length} choices`);
+    }
+  }
+  assert.equal(new Set(TALENTS[c].flat().map((n) => n.id)).size, TALENTS[c].flat().length, `${c}: no repeated node id`);
+  const nodes = TALENTS[c].flat();
+  for (const n of nodes) {
+    const eff = Object.entries(n.eff || {});
+    assert(eff.length > 0, `${c} ${n.id}: no effect`);
+    assert(n.desc.en.length > 3 && n.desc.it.length > 3, `${c} ${n.id}: no description`);
+    for (const [k] of eff) {
+      if (k.startsWith('skill:')) assert(SKILLS[k.slice(6)], `${c} ${n.id}: unknown skill ${k}`);
+      else if (k.startsWith('flag:')) assert(FLAGS.has(k.slice(5)), `${c} ${n.id}: flag ${k} is never read by the rules`);
+      else assert(STAT_KEYS.has(k), `${c} ${n.id}: unknown stat ${k}`);
+    }
+  }
+  assert(existsSync(`assets/img/${CLASSES[c].art}.webp`), `${c}: picture assets/img/${CLASSES[c].art}.webp`);
+  const bosses = Object.values(ENEMIES).filter((e) => e.boss);
+  assert.equal(bosses.length, ACTS.length, 'one boss per act');
+  for (const b of bosses) assert(existsSync(`assets/img/${b.art}.webp`), `boss picture ${b.art}`);
+}
+assert.equal(depths.size, 1, 'every class has the same number of talent levels');
+// mana: every skill has a price, and the class has a pool to pay it from
+for (const [id, sk] of Object.entries(SKILLS)) assert(Number.isInteger(sk.mana) && sk.mana > 0, `skill ${id}: no mana cost`);
+for (const c of Object.keys(CLASSES)) {
+  assert(CLASSES[c].pool > 0 && CLASSES[c].regen > 0, `${c}: no mana pool`);
+  for (const id of CLASSES[c].skills) assert(SKILLS[id], `${c}: unknown skill ${id}`);
+}
+// a mage cannot cast the same spell every turn: the pool does not refill that fast
+{
+  const g = Game.create({ cls: 'mage', name: 'Test', meta: {} });
+  const cost = g.skillCost('firebolt'), regen = g.manaRegen();
+  assert(cost > regen, `firebolt costs ${cost} and comes back at ${regen} a turn: no reason not to spam it`);
+  g.player.mp = cost;
+  assert(g.useSkill('firebolt', 0, 0) === false || g.player.mp < cost, 'a spell was cast without paying');
+}
 console.log('selftest ok');

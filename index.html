@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <title>Dungeon101</title>
-  <meta name="description" content="A turn-based roguelite in the browser: nine floors, three bosses, permadeath and a sanctuary that keeps your progress. Free, no install.">
+  <meta name="description" content="A turn-based roguelite in the browser: twenty-seven floors, nine bosses, six heroes, permadeath and a sanctuary that keeps your progress. Free, no install.">
   <meta name="theme-color" content="#0b0a0d">
   <meta property="og:title" content="Dungeon101">
-  <meta property="og:description" content="Nine floors. Three tyrants. One torch. A turn-based roguelite you play in the browser.">
+  <meta property="og:description" content="Twenty-seven floors. Nine tyrants. Six heroes. One torch. A turn-based roguelite you play in the browser.">
   <meta property="og:image" content="https://dungeon101.github.io/assets/img/og.jpg">
   <meta property="og:type" content="website">
   <meta name="twitter:card" content="summary_large_image">
@@ -46,6 +46,7 @@
         <div class="info">
           <div class="top"><b class="name"></b><span class="lvl"></span></div>
           <div id="hp" class="bar hp"><i></i><span class="bt"></span></div>
+          <div id="mp" class="bar mp"><i></i><span class="bt"></span></div>
           <div id="xp" class="bar xp"><i></i></div>
           <div class="st"></div>
         </div>
@@ -57,7 +58,7 @@
       <div id="bossbar"><span class="n"></span><div class="bar boss"><i></i></div></div>
       <div id="side">
         <div id="where" class="glass"></div>
-        <div id="mapbox" class="glass"><canvas id="minimap"></canvas></div>
+        <button id="mapbox" class="glass" data-go="map" title="" aria-label="Map"><canvas id="minimap"></canvas></button>
         <div class="buttons">
           <button class="round" data-go="map" data-icon="map" aria-label="Map"></button>
           <button class="round" data-go="inv" data-icon="backpack" aria-label="Inventory"></button>

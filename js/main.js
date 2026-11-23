@@ -1,6 +1,6 @@
 // Screens, HUD, overlays and input. Wires the rules (game.js) to the renderer and to saving.
-import { CLASSES, SKILLS, TALENTS, ENEMIES, RARITIES, UPGRADES, RELICS, CONSUMABLES, SLOT_ICON, HERO_NAMES, actOf, isBossFloor } from './data.js';
-import { Game, itemName, itemLines, itemScore, xpNext } from './game.js';
+import { CLASSES, SKILLS, TALENTS, BRANCHES, ENEMIES, RELIC_MAX, RARITIES, UPGRADES, UP_GROUPS, RELICS, CONSUMABLES, SLOT_ICON, HERO_NAMES, actOf, isBossFloor, FLOORS } from './data.js';
+import { Game, itemName, itemLines, itemScore, itemCompare, statLabel, statShort, xpNext, SPEC_MAX, SPEC_LVL } from './game.js';
 import { Renderer } from './render.js';
 import { path as findPath, walkable, DIRS, dist } from './dungeon.js';
 import { t, L, lang, setLang } from './i18n.js';
@@ -18,8 +18,13 @@ const write = (k, v) => { try { localStorage.setItem(k, v); } catch { /* not rem
 let meta = loadMeta();
 let g = null, R = null, screen = 'title', overlay = null;
 let targeting = null, walk = null, focusId = null, held = null, endShown = false;
-const TALENT_ICONS = { warrior: ['shield', 'swords', 'zap'], mage: ['flame', 'snowflake', 'sparkles'], rogue: ['footprints', 'droplet', 'wind'] };
-const ART = [...Object.values(CLASSES).map((c) => c.art), ...new Set(Object.values(ENEMIES).map((e) => e.art))];
+const BRANCH_ICONS = Object.fromEntries(Object.entries(BRANCHES).map(([id, bs]) => [id, bs.map((b) => b.icon)]));
+// every picture the renderer may need; a file that is missing falls back to a plain token
+const ART = [...new Set([
+  ...Object.values(CLASSES).map((c) => c.art),
+  ...Object.values(ENEMIES).map((e) => e.art),
+  'death', 'victory',
+])];
 
 // ---------- screens ----------
 function show(id) {
@@ -31,12 +36,20 @@ function show(id) {
 }
 
 function renderTitle() {
-  const saved = loadRun();
+  const saved = loadRun(), st = meta.stats || {};
+  const bought = UPGRADES.filter((u) => (meta.upgrades[u.id] || 0) > 0).length;
+  const relics = Object.values(meta.relics || {}).filter((l) => l > 0).length;
   $('#s-title .menu').innerHTML = `
     ${saved ? `<button class="btn gold" data-go="continue">${icon('play')}<span>${t('continue')}</span><small>${esc(saved.player?.name || '')} · ${t('floor', saved.floor)}</small></button>` : ''}
-    <button class="btn ${saved ? '' : 'gold'}" data-go="new">${icon('swords')}<span>${t('newRun')}</span></button>
+    <button class="btn ${saved ? '' : 'gold'}" data-go="new">${icon('swords')}<span>${t('newRun')}</span><small>${t('titleClasses', Object.keys(CLASSES).length)}</small></button>
     <button class="btn" data-go="sanctuary">${icon('flame')}<span>${t('sanctuary')}</span><small>${meta.embers} ${t('embers').toLowerCase()}</small></button>
-    <button class="btn" data-go="hall">${icon('trophy')}<span>${t('hall')}</span></button>`;
+    <button class="btn" data-go="hall">${icon('trophy')}<span>${t('hall')}</span></button>
+    ${st.runs ? `<div class="titleprogress">
+      <span>${icon('skull')} ${t('titleRuns', st.runs)}</span>
+      <span>${icon('arrow-down-to-line')} ${t('titleBest', st.best || 0, FLOORS)}</span>
+      <span>${icon('flame')} ${t('titleUpgrades', bought, UPGRADES.length)}</span>
+      <span>${icon('gem')} ${t('titleRelics', relics, Object.keys(RELICS).length)}</span>
+      ${st.wins ? `<span class="won">${icon('crown')} ${t('titleWins', st.wins)}</span>` : ''}</div>` : `<p class="firsthint">${icon('hand-pointer')} ${t('titleFirst')}</p>`}`;
   $('#s-title .tagline').textContent = t('tagline');
   renderAccount();
   renderToggles();
@@ -69,7 +82,7 @@ function renderSelect() {
       <button class="card class ${pick.cls === id ? 'sel' : ''}" data-cls="${id}" style="--c:${c.color}">
         <img src="assets/img/${c.art}.webp" alt="" width="160" height="160">
         <h3>${L(c.name)}</h3><p>${L(c.blurb)}</p>
-        <div class="bars"><span>PV ${stat(c.hp, 36)}</span><span>${t('armor')} ${stat(c.ac - 8, 7)}</span><span>${lang === 'it' ? 'Danni' : 'Damage'} ${stat(c.dmg[1] + (id === 'mage' ? 6 : 0), 10)}</span></div>
+        <div class="bars"><span>PV ${stat(c.hp, 42)}</span><span>${t('armor')} ${stat(c.ac - 8, 9)}</span><span>${lang === 'it' ? 'Danni' : 'Damage'} ${stat(c.dmg[1] + (SKILLS[c.skills[0]].target === 'enemy' ? 6 : 0), 13)}</span></div>
         <div class="skill">${icon(SKILLS[c.skills[0]].icon)}<div><b>${L(SKILLS[c.skills[0]].name)}</b><small>${L(SKILLS[c.skills[0]].desc)}</small></div></div>
       </button>`).join('')}</div>
     <div class="row">
@@ -78,7 +91,7 @@ function renderSelect() {
     </div>
     ${relics.length ? `<div class="pickrow"><span>${t('relic')}</span>
       <button class="chip ${!pick.relic ? 'sel' : ''}" data-relic="">${t('noRelic')}</button>
-      ${relics.map(([id, r]) => `<button class="chip ${pick.relic === id ? 'sel' : ''}" data-relic="${id}" title="${esc(L(r.desc))}">${icon(r.icon)} ${L(r.name)}</button>`).join('')}</div>` : ''}
+      ${relics.map(([id, r]) => `<button class="chip ${pick.relic === id ? 'sel' : ''}" data-relic="${id}" title="${esc(L(r.desc))}">${icon(r.icon)} ${L(r.name)} <em class="lv">${'★'.repeat(meta.relics[id] || 1)}</em></button>`).join('')}</div>` : ''}
     ${vault ? `<div class="pickrow"><span>${t('heirloom')}</span>
       <button class="chip ${pick.heir ? 'sel' : ''}" data-heir="1" style="color:${RARITIES[vault.rarity].color}">${icon(SLOT_ICON[vault.slot])} ${esc(itemName(vault))}</button>
       <button class="chip ${!pick.heir ? 'sel' : ''}" data-heir="">${t('noHeirloom')}</button></div>` : ''}
@@ -86,24 +99,44 @@ function renderSelect() {
     <button class="btn gold big" data-go="begin">${icon('arrow-down-to-line')}<span>${t('begin')}</span></button></div>`;
 }
 
+let upTab = 'all';
+// the sanctuary: fifty cards is a wall, so they sit on five shelves. A shelf shows the ones you have
+// begun, the affordable ones first, and the rest folded away until you ask for them.
 function renderSanctuary() {
-  const s = meta.stats;
+  const icon_ = icon;
+  const st = meta.stats, lv = (id) => meta.upgrades[id] || 0;
+  const bought = UPGRADES.filter((u) => lv(u.id) > 0).length;
+  const card = (u) => {
+    const l = lv(u.id), cost = u.cost[l], max = l >= u.max, can = !max && meta.embers >= cost;
+    return `<div class="card up ${max ? 'max' : ''} ${can ? 'can' : ''}">
+      <div class="ic">${icon(u.icon)}</div>
+      <div><h3>${L(u.name)}${l ? ` <em class="lv">${l}/${u.max}</em>` : ''}</h3><p>${L(u.desc)}</p><div class="pips">${Array.from({ length: u.max }, (_, i) => `<i class="${i < l ? 'on' : ''}"></i>`).join('')}</div></div>
+      <button class="btn small ${can ? 'gold' : ''}" data-buyup="${u.id}" ${max || !can ? 'disabled' : ''}>${max ? t('maxed') : `${icon('flame')} ${cost}`}</button>
+    </div>`;
+  };
+  const shelf = (gid, ic, nm, list) => {
+    const have = list.filter((u) => lv(u.id) > 0), rest = list.filter((u) => !lv(u.id));
+    const open = upTab === gid;
+    return `<div class="shelf ${open ? 'open' : ''}">
+      <button class="shelfhead" data-shelf="${gid}">${icon_(ic)}<b>${L(nm)}</b>
+        <small>${have.length}/${list.length}${open || have.length ? '' : ` · ${t('shelfNone')}`}</small>${icon_(open ? 'chevrons-down' : 'chevrons-right')}</button>
+      ${open ? `<div class="upgrades">${[...have.sort((a, b) => lv(b.id) - lv(a.id)), ...rest].map(card).join('')}</div>` : ''}
+    </div>`;
+  };
+  const shown = upTab === 'all' ? UP_GROUPS : UP_GROUPS.filter((g) => g.id === upTab);
   $('#s-sanctuary .body').innerHTML = `
     <h2>${t('sanctuary')}</h2>
-    <p class="embers">${icon('flame')} <b>${meta.embers}</b> ${t('embers')}</p>
-    <div class="upgrades">${UPGRADES.map((u) => {
-      const lvl = meta.upgrades[u.id] || 0, cost = u.cost[lvl], max = lvl >= u.max;
-      return `<div class="card up ${max ? 'max' : ''}">
-        <div class="ic">${icon(u.icon)}</div>
-        <div><h3>${L(u.name)}</h3><p>${L(u.desc)}</p><div class="pips">${Array.from({ length: u.max }, (_, i) => `<i class="${i < lvl ? 'on' : ''}"></i>`).join('')}</div></div>
-        <button class="btn small ${!max && meta.embers >= cost ? 'gold' : ''}" data-buy="${u.id}" ${max || meta.embers < cost ? 'disabled' : ''}>${max ? t('maxed') : `${icon('flame')} ${cost}`}</button>
-      </div>`;
-    }).join('')}</div>
+    <p class="embers">${icon_('flame')} <b>${meta.embers}</b> ${t('embers')} <small class="muted">${t('upBought', bought, UPGRADES.length)}</small></p>
+    <div class="tabs shelves">${[{ id: 'all', icon: 'sparkles', name: { en: 'All', it: 'Tutti' } }, ...UP_GROUPS].map((g) => `<button class="chip ${upTab === g.id ? 'sel' : ''}" data-shelf="${g.id}">${icon_(g.icon)}${L(g.name)}</button>`).join('')}</div>
+    ${shown.map((g) => shelf(g.id, g.icon, g.name, UPGRADES.filter((u) => u.g === g.id))).join('')}
     <h3 class="sub">${t('relics')}</h3>
-    <div class="relics">${Object.entries(RELICS).map(([id, r]) => `<div class="card relic ${meta.relics[id] ? 'on' : ''}">${icon(meta.relics[id] ? r.icon : 'lock')}<div><b>${L(r.name)}</b><small>${meta.relics[id] ? L(r.desc) : t('relicLocked', L(ENEMIES[r.boss].name))}</small></div></div>`).join('')}</div>
+    <div class="relics">${Object.entries(RELICS).map(([id, r]) => {
+      const rl = meta.relics[id] || 0;
+      return `<div class="card relic ${rl ? 'on' : ''}">${icon_(rl ? r.icon : 'lock')}<div><b>${L(r.name)}${rl ? ` <em class="stars">${'★'.repeat(rl)}${'☆'.repeat(RELIC_MAX - rl)}</em>` : ''}</b><small>${rl ? L(r.desc) : t('relicLocked', L(ENEMIES[r.boss].name))}</small>${rl && rl < RELIC_MAX ? `<small class="muted">${t('relicNext', rl + 1, L(r.per))}</small>` : ''}</div></div>`;
+    }).join('')}</div>
     <h3 class="sub">${t('lifetime')}</h3>
-    <div class="lifetime"><span><b>${s.runs}</b>${t('runs')}</span><span><b>${s.best}</b>${t('bestFloor')}</span><span><b>${s.wins}</b>${t('wins')}</span><span><b>${s.kills}</b>${t('totalKills')}</span></div>
-    <div class="actions"><button class="btn" data-go="title">${icon('x')}<span>${t('back')}</span></button><button class="btn gold" data-go="new">${icon('swords')}<span>${t('newRun')}</span></button></div>`;
+    <div class="lifetime"><span><b>${st.runs}</b>${t('runs')}</span><span><b>${st.best}</b>${t('bestFloor')}</span><span><b>${st.wins}</b>${t('wins')}</span><span><b>${st.kills}</b>${t('totalKills')}</span></div>
+    <div class="actions"><button class="btn" data-go="title">${icon_('x')}<span>${t('back')}</span></button><button class="btn gold" data-go="new">${icon_('swords')}<span>${t('newRun')}</span></button></div>`;
 }
 
 let hallTab = 'global';
@@ -137,7 +170,10 @@ function newRun() {
   const heirloom = pick.heir && meta.vault ? meta.vault : null;
   if (heirloom) meta.vault = null;
   saveMeta(meta); pushMeta();
-  startRun(Game.create({ cls: pick.cls, name, relic: pick.relic, heirloom, meta }));
+  const run = Game.create({ cls: pick.cls, name, relic: pick.relic, relicLvl: pick.relic ? meta.relics[pick.relic] || 1 : 1, heirloom, meta });
+  if (CLASSES[pick.cls].skills.includes('beast')) run.useSkill('beast'); // the hunter's wolf is there from the first turn
+  run.ev.length = 0;
+  startRun(run);
   saveRun(g);
 }
 
@@ -145,7 +181,7 @@ function floorIntro() {
   const act = actOf(g.floor);
   ambient(act.id);
   const box = $('#floor-card');
-  box.innerHTML = `<small>${t('floorOf', g.floor)}</small><b>${L(act.name)}</b>${isBossFloor(g.floor) ? `<small class="danger">${icon('skull')}</small>` : ''}`;
+  box.innerHTML = `<small>${t('floorOf', g.floor, FLOORS)}</small><b>${L(act.name)}</b>${isBossFloor(g.floor) ? `<small class="danger">${icon('skull')}</small>` : ''}`;
   box.classList.remove('on'); void box.offsetWidth; box.classList.add('on');
 }
 
@@ -165,6 +201,7 @@ function after() {
   else R.play(ev);
   for (const e of ev) {
     if (e.t === 'boss') bossIntro(e.id);
+    if (e.t === 'shop') setTimeout(() => { if (!g.over && !overlay) shop(); }, 260);
     if (e.t === 'level') toast(`${t('levelUp', e.lvl)} <small>${t('talentPoint')}</small>`, 'gold');
     if ((e.t === 'atk' || e.t === 'shot') && (e.a === g.player.id ? e.d : e.a) !== g.player.id) focusId = e.a === g.player.id ? e.d : e.a;
     if (e.t === 'fx' && e.k === 'pickup' && e.it.slot !== 'use') toast(`${icon(SLOT_ICON[e.it.slot])} <span style="color:${RARITIES[e.it.rarity].color}">${esc(t('newItem', itemName(e.it)))}</span>`);
@@ -174,10 +211,16 @@ function after() {
   hud();
 }
 
+// how far a run got, so the end screen can say "your best" and not just a number
+function bestSoFar(before) {
+  const st = before?.stats || {};
+  return { floor: st.best || 0, score: st.bestScore || 0, runs: st.runs || 0 };
+}
 function endRun() {
   if (endShown) return;
   endShown = true;
   clearRun();
+  const before = JSON.parse(JSON.stringify(meta));   // to compare the run with the record it may have beaten
   const res = finishRun(meta, g);
   saveMeta(meta);
   pushMeta();
@@ -185,18 +228,57 @@ function endRun() {
   hud();
   setTimeout(() => {
     if (res.win) sfx('win');
-    const s = g.stats;
+    const s = g.stats, p = g.player, c = CLASSES[p.cls];
+    const rec = bestSoFar(before);
+    const record = res.win || g.floor > rec.floor;
+    const best = Math.max(rec.score, res.score) === res.score;
+    // what the run gave you, in the order it matters
+    const gifts = [];
+    if (res.newRelics.length) gifts.push(`${icon('gem')} ${t('endRelics', res.newRelics.map((id) => L(RELICS[id].name)).join(', '))}`);
+    if (meta.upgrades.heirloom) { const it = meta.vault || null; if (it) gifts.push(`${icon(SLOT_ICON[it.slot])} ${t('endVault', esc(itemName(it)))}`); }
+    const bosses = s.bosses.length;
+    // where the run stood: the pips of the nine acts, with the one it reached lit
+    const act = actOf(g.floor);
+    const pips = Array.from({ length: FLOORS }, (_, i) => {
+      const f = i + 1, a = actOf(f);
+      return `<i class="${f <= g.floor ? 'on' : ''} ${f === g.floor ? 'here' : ''} ${isBossFloor(f) ? 'boss' : ''}" title="${esc(L(a.name))} · ${t('floorOf', f, FLOORS)}"></i>`;
+    }).join('');
     openOverlay('end', `
       <div class="end ${res.win ? 'win' : ''}">
         <img class="art" src="assets/img/${res.win ? 'victory' : 'death'}.webp" alt="">
         <h2>${t(res.win ? 'victory' : 'youDied')}</h2>
-        <p>${res.win ? t('winText') : esc(t('slainBy', byName(g.killer), g.floor))}</p>
-        <div class="lifetime"><span><b>${g.floor}</b>${t('statFloor')}</span><span><b>${g.player.lvl}</b>${t('statLevel')}</span><span><b>${s.kills}</b>${t('statKills')}</span><span><b>${s.gold}</b>${t('statGold')}</span><span><b>${res.score}</b>${t('statScore')}</span></div>
-        <p class="embers">${icon('flame')} ${t('embersEarned', res.embers)}</p>
-        ${res.newRelics.map((id) => `<p class="relic-new">${icon(RELICS[id].icon)} ${t('newRelic', L(RELICS[id].name))}</p>`).join('')}
+        <p class="sub">${res.win ? t('winText') : esc(t('slainBy', byName(g.killer), g.floor))}</p>
+        <div class="endhead">${icon('shield-half')}
+          <span>${esc(p.name)} · ${L(c.name)} · ${t('level', p.lvl)}</span>
+          ${record && !res.win ? `<em class="badge">${icon('crown')} ${t('endRecord')}</em>` : ''}
+          ${best ? `<em class="badge gold">${icon('trophy')} ${t('endBest')}</em>` : ''}</div>
+        <div class="pips acts">${pips}</div>
+        <p class="endact">${icon('compass')} ${L(act.name)} · ${t('floorOf', g.floor, FLOORS)}${bosses ? ` · ${icon('skull')} ${t('endBosses', bosses)}` : ''}</p>
+        <div class="lifetime">
+          <span><b>${g.floor}</b>${t('statFloor')}<small>${t('endOf', FLOORS)}</small></span>
+          <span><b>${p.lvl}</b>${t('statLevel')}</span>
+          <span><b>${s.kills}</b>${t('statKills')}</span>
+          <span><b>${s.gold}</b>${t('statGold')}</span>
+          <span><b>${res.score}</b>${t('statScore')}<small>${t('endBestOf', rec.score)}</small></span>
+        </div>
+        <p class="embers">${icon('flame')} ${t('embersEarned', res.embers)} <small>${t('endEmbersTotal', meta.embers)}</small></p>
+        ${gifts.map((g2) => `<p class="relic-new">${g2}</p>`).join('')}
+        ${meta.embers >= cheapestUpgrade() ? `<p class="muted">${icon('flame')} ${t('endCanBuy', cheapestUpgrade())}</p>` : ''}
         <div class="actions"><button class="btn" data-go="title">${t('menu')}</button><button class="btn" data-go="sanctuary">${icon('flame')}<span>${t('toSanctuary')}</span></button><button class="btn gold" data-go="new">${icon('swords')}<span>${t('again')}</span></button></div>
       </div>`, true);
   }, res.win ? 2400 : 1700);
+}
+
+// the cheapest thing in the Sanctuary you could afford right now, or 0
+function cheapestUpgrade() {
+  let min = 0;
+  for (const u of UPGRADES) {
+    const l = meta.upgrades[u.id] || 0;
+    if (l >= u.max) continue;
+    const c = u.cost[l];
+    if (c <= meta.embers && (!min || c < min)) min = c;
+  }
+  return min;
 }
 
 // Italian: "da" + article becomes "dal", "dalla", "dall'"
@@ -207,6 +289,7 @@ function useSkill(id) {
   const sk = SKILLS[id];
   if (!g.skills().includes(id)) return;
   if ((g.player.cds[id] || 0) > 0) { pulse(`[data-skill="${id}"]`); return; }
+  if (g.player.mp < g.skillCost(id)) { g.say(t('lNoMana')); hud(); pulse(`[data-skill="${id}"]`); return; }
   if (!sk.target) { act({ type: 'skill', id }); return; }
   if (targeting && targeting.id === id) { confirmTarget(); return; }
   const list = g.targets(id);
@@ -276,6 +359,8 @@ function hud() {
   $('#hero .lvl').textContent = t('level', p.lvl);
   setBar('#hp', p.hp, st.maxHp, `${p.hp} / ${st.maxHp}`);
   setBar('#xp', p.xp, xpNext(p.lvl), '');
+  setBar('#mp', p.mp, g.manaPool(), `${p.mp} / ${g.manaPool()}`);
+  $('#mp').classList.toggle('low', p.mp < g.manaRegen());
   const sts = [];
   if (p.st.poison > 0) sts.push(['droplet', '#8cf05a', p.st.poison]);
   if (p.st.stun > 0) sts.push(['zap', '#ffe46b', p.st.stun]);
@@ -284,17 +369,23 @@ function hud() {
   if (p.venom > 0) sts.push(['droplet', '#5ee08a', p.venom]);
   if (g.relic) sts.push([RELICS[g.relic].icon, '#ffd36b', '']);
   $('#hero .st').innerHTML = sts.map(([n, col, v]) => `<span style="color:${col}">${icon(n)}${v}</span>`).join('');
-  $('#where').innerHTML = `<b>${L(act.name)}</b><span>${t('floorOf', g.floor)}</span><span class="gold">${icon('coins')} ${p.gold}</span>`;
+  const mapBtn = $('#mapbox');
+  if (mapBtn) { mapBtn.title = `${t('map')} · ${L(act.name)} · ${t('floorOf', g.floor, FLOORS)}`; mapBtn.setAttribute('aria-label', mapBtn.title); }
+  $('#where').innerHTML = `<b>${L(act.name)}</b><span>${t('floorOf', g.floor, FLOORS)}</span><span class="gold">${icon('coins')} ${p.gold}</span>`;
   // skills
   const known = g.skills();
+  const potions = p.bag.filter((x) => x.kind === 'heal' || x.kind === 'greatHeal').reduce((n, x) => n + (x.n || 1), 0);
   $('#skills').innerHTML = c.skills.map((id, i) => {
-    const sk = SKILLS[id], k = known.includes(id), cd = p.cds[id] || 0;
-    return `<button class="act ${!k ? 'locked' : ''} ${cd ? 'cd' : ''} ${targeting?.id === id ? 'aim' : ''}" data-skill="${id}" ${!k ? 'disabled' : ''} title="${esc(L(sk.name) + ' · ' + L(sk.desc))}">
-      ${icon(k ? sk.icon : 'lock')}<kbd>${i + 1}</kbd>${cd ? `<em>${cd}</em>` : ''}<span>${L(sk.name)}</span></button>`;
+    const sk = SKILLS[id], k = known.includes(id), cd = p.cds[id] || 0, cost = g.skillCost(id), poor = k && !cd && p.mp < cost;
+    const why = !k ? 'locked' : cd ? 'cool' : poor ? 'poor' : '';
+    return `<button class="act ${why} ${targeting?.id === id ? 'aim' : ''}" data-skill="${id}" ${!k ? 'disabled' : ''} title="${esc(L(sk.name) + ' · ' + L(sk.desc))}" aria-label="${esc(L(sk.name))}">
+      <kbd>${i + 1}</kbd>${icon(k ? sk.icon : 'lock')}
+      ${cd ? `<em class="cd">${cd}</em>` : k ? `<em class="cost ${poor ? 'poor' : ''}" title="${t('mana')}">${cost}</em>` : ''}
+      <span>${L(sk.name)}</span></button>`;
   }).join('') + `
-    <button class="act potion" data-go="potion" title="${esc(L(CONSUMABLES.heal.name))}">${icon('flask-conical')}<kbd>4</kbd><em class="n">${p.bag.filter((x) => x.kind === 'heal').length}</em><span>${t('potion')}</span></button>
-    <button class="act" data-go="wait" title="${t('wait')}">${icon('hourglass')}<kbd>5</kbd><span>${t('wait')}</span></button>
-    ${g.onStairs() ? `<button class="act stairs" data-go="descend">${icon('arrow-down-to-line')}<kbd>↵</kbd><span>${t('descend')}</span></button>` : ''}`;
+    <button class="act potion ${potions ? '' : 'locked'}" data-go="potion" title="${esc(L(CONSUMABLES.heal.name))}" aria-label="${t('potion')}">${icon('flask-conical')}<kbd>4</kbd>${potions ? `<em class="n">${potions}</em>` : ''}<span>${t('potion')}</span></button>
+    <button class="act" data-go="wait" title="${t('wait')}" aria-label="${t('wait')}">${icon('hourglass')}<kbd>5</kbd><span>${t('wait')}</span></button>
+    ${g.onStairs() ? `<button class="act stairs" data-go="descend" title="${t('descend')}" aria-label="${t('descend')}">${icon('arrow-down-to-line')}<kbd>↵</kbd><span>${t('descend')}</span></button>` : ''}`;
   $('#btn-talents').classList.toggle('glow', p.points > 0);
   $('#btn-talents em').textContent = p.points || '';
   // boss bar
@@ -310,7 +401,8 @@ function hud() {
     $('#focus .n').innerHTML = `${esc(L(ENEMIES[f.type].name))}${f.elite ? ` <i>${lang === 'it' ? 'élite' : 'elite'}</i>` : ''}`;
     setBar('#focus', f.hp, f.maxHp, `${f.hp} / ${f.maxHp}`);
   }
-  $('#log').innerHTML = g.log.slice(-5).map((l, i, a) => `<p class="${l.c}" style="opacity:${0.35 + 0.65 * (i + 1) / a.length}">${esc(l.s)}</p>`).join('');
+  const lines = g.log.slice(-5);
+  $('#log').innerHTML = lines.map((l, i) => `<p class="${l.c}" style="opacity:${(0.3 + 0.7 * (i + 1) / lines.length).toFixed(2)}">${esc(l.s)}</p>`).join('');
   R.drawMinimap(overlay === 'map');
 }
 
@@ -353,6 +445,9 @@ function closeOverlay() {
 }
 
 let invSel = null;
+// the bag: stacks show their count, gear shows a green corner when it beats what you wear.
+// The card on the right puts the item and the one you wear on the same rows, so the difference is
+// a number with an arrow, not two lists to compare in your head.
 function inventory() {
   const p = g.player, st = g.ps();
   const slot = (s) => {
@@ -366,11 +461,19 @@ function inventory() {
     const isEq = Object.values(p.equip).includes(sel), use = sel.slot === 'use';
     const cur = !use && !isEq ? p.equip[sel.slot] : null;
     const color = use ? CONSUMABLES[sel.kind].color : RARITIES[sel.rarity].color;
+    const rows = cur ? itemCompare(sel, cur) : [];
+    const ups = rows.filter((r) => r.d > 0).length, downs = rows.filter((r) => r.d < 0).length;
+    const verdict = !cur ? '' : ups && !downs ? `<span class="verdict up">${icon('arrow-up-right')} ${t('better')}</span>` : downs && !ups ? `<span class="verdict down">${icon('arrow-down-right')} ${t('worse')}</span>` : `<span class="verdict mix">${icon('arrow-right-left')} ${t('tradeoff')}</span>`;
     detail = `<div class="detail" style="--r:${color}">
-      <h3>${icon(use ? CONSUMABLES[sel.kind].icon : SLOT_ICON[sel.slot])} ${esc(itemName(sel))}</h3>
-      <small>${use ? '' : `${L(RARITIES[sel.rarity].name)} · ${t(sel.slot)} · T${sel.tier}`}</small>
-      <ul>${itemLines(sel).map((l) => `<li>${esc(l)}</li>`).join('')}</ul>
-      ${cur ? `<p class="muted">${t('equipped')}: ${esc(itemName(cur))}</p><ul class="cmp">${itemLines(cur).map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}
+      <div class="head">${icon(use ? CONSUMABLES[sel.kind].icon : SLOT_ICON[sel.slot])}
+        <div><h3>${esc(itemName(sel))}${use && (sel.n || 1) > 1 ? ` <em class="x">×${sel.n}</em>` : ''}</h3>
+        <small>${use ? L(CONSUMABLES[sel.kind].name) : `${L(RARITIES[sel.rarity].name)} · ${t(sel.slot)} · T${sel.tier}`}</small></div>
+        ${verdict}</div>
+      ${cur ? `<div class="cmphead"><span></span><span>${esc(itemName(sel))}</span><span>${t('equipped')}</span><span></span></div>
+      <div class="cmprows">${rows.map((r) => `<div class="cmprow ${r.d > 0 ? 'up' : r.d < 0 ? 'down' : ''}">
+        <span class="k">${icon(statShort(r.key))}${statLabel(r.key, Math.max(r.mine, r.theirs)).replace(String(Math.max(r.mine, r.theirs)), '')}</span>
+        <b>${r.mine}</b><b>${r.theirs}</b><span class="d">${r.d ? (r.d > 0 ? '+' : '') + r.d : ''}</span></div>`).join('')}</div>` : `<ul class="own">${itemLines(sel).map((l) => `<li>${esc(l)}</li>`).join('')}</ul>`}
+      ${cur && !rows.length ? `<ul class="own">${itemLines(sel).map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}
       <div class="actions">
         ${use ? `<button class="btn gold small" data-inv="use">${t('use')}</button>` : isEq ? '' : `<button class="btn gold small" data-inv="equip">${t('equip')}</button>`}
         ${isEq ? '' : `<button class="btn small" data-inv="drop">${t('drop')}</button>`}
@@ -378,44 +481,120 @@ function inventory() {
   }
   openOverlay('inv', `
     <h2>${icon('backpack')} ${t('inventory')}</h2>
-    <div class="stats"><span>${icon('heart')} ${p.hp}/${st.maxHp}</span><span>${icon('shield')} ${st.ac}</span><span>${icon('target')} +${st.hit}</span><span>${icon('sword')} ${st.dmg[0] + st.power}-${st.dmg[1] + st.power}</span><span>${icon('eye')} ${st.light}</span></div>
+    <div class="stats"><span>${icon('heart')} ${p.hp}/${st.maxHp}</span><span>${icon('droplet')} ${p.mp}/${g.manaPool()}</span><span>${icon('shield')} ${st.ac}</span><span>${icon('target')} +${st.hit}</span><span>${icon('sword')} ${st.dmg[0] + st.power}-${st.dmg[1] + st.power}</span><span>${icon('coins')} ${p.gold}</span></div>
+    <div class="pane"><div class="left">
     <h4>${t('equipped')}</h4><div class="slots">${['weapon', 'armor', 'trinket'].map(slot).join('')}</div>
-    <h4>${t('bag')} <small>${p.bag.length}/16</small></h4>
+    <h4>${t('bag')} <small>${p.bag.length}/${g.bagSize()}</small></h4>
     <div class="bag">${p.bag.map((it) => {
       const use = it.slot === 'use', col = use ? CONSUMABLES[it.kind].color : RARITIES[it.rarity].color;
       const better = !use && itemScore(it) > itemScore(p.equip[it.slot]);
-      return `<button class="cell ${invSel === it.uid ? 'sel' : ''}" data-item="${it.uid}" style="--r:${col}" title="${esc(itemName(it))}">${icon(use ? CONSUMABLES[it.kind].icon : SLOT_ICON[it.slot])}${better ? '<i class="up"></i>' : ''}</button>`;
-    }).join('')}${Array.from({ length: Math.max(0, 16 - p.bag.length) }, () => '<span class="cell empty"></span>').join('')}</div>
-    ${detail}`);
+      const n = it.n || 1;
+      return `<button class="cell ${invSel === it.uid ? 'sel' : ''}" data-item="${it.uid}" style="--r:${col}" title="${esc(itemName(it))}">${icon(use ? CONSUMABLES[it.kind].icon : SLOT_ICON[it.slot])}${n > 1 ? `<em class="n">${n}</em>` : ''}${better ? '<i class="up"></i>' : ''}</button>`;
+    }).join('')}${Array.from({ length: Math.max(0, g.bagSize() - p.bag.length) }, () => '<span class="cell empty"></span>').join('')}</div>
+    </div><div class="right">${detail || `<p class="hint">${icon('hand-pointer')} ${t('invHint')}</p>`}</div></div>`);
+}
+
+// the merchant: his stock on the left, what he pays for your things on the right
+function shop() {
+  const p = g.player, sh = g.shop();
+  const line = (it, price, act) => {
+    const use = it.slot === 'use', col = use ? CONSUMABLES[it.kind].color : RARITIES[it.rarity].color;
+    return `<button class="trade" ${act} style="--r:${col}">${icon(use ? CONSUMABLES[it.kind].icon : SLOT_ICON[it.slot])}
+      <span>${esc(itemName(it))}${(it.n || 1) > 1 ? ` ×${it.n}` : ''}<small>${use ? '' : L(RARITIES[it.rarity].name)}</small></span>
+      <b>${icon('coins')}${price}</b></button>`;
+  };
+  openOverlay('shop', `
+    <h2>${icon('store')} ${t('merchant')}</h2>
+    <p class="muted">${t('lMerchant')} · ${icon('coins')} <b class="gold">${p.gold}</b></p>
+    <div class="shop">
+      <div><h4>${t('lBuy')}</h4><div class="trades">${sh.stock.filter((x) => !x.sold).map((x) => line(x.it, x.price, `data-buy="${x.i}" ${x.can ? '' : 'disabled'}`)).join('') || `<p class="muted">${t('lMerchantLeft')}</p>`}</div></div>
+      <div><h4>${t('lSell')}</h4><div class="trades">${sh.sell.map((x) => line(x.it, x.price, `data-sell="${x.it.uid}"`)).join('') || `<p class="muted">${t('lNothingToSell')}</p>`}</div></div>
+    </div>
+    <div class="actions"><button class="btn small" data-close="1">${t('back')}</button></div>`);
 }
 
 let talSel = null;
+// the talents: five branches side by side, ten levels running down each one, and on every level the two
+// choices on the same row. A branch is a specialisation: the first one is picked here, the second opens at
+// level 10. Clicking a node opens a card next to it, so the choice is made where the eye already is.
 function talents() {
-  const p = g.player, tree = TALENTS[p.cls];
+  const p = g.player, tree = TALENTS[p.cls], names = BRANCHES[p.cls];
+  const lvlOf = (n) => Number(n.id.slice(1).replace(/[ab]$/, ''));
+  const has = (n) => !!p.talents[n.id];
+  const pairTaken = (n) => { const t = n.id.endsWith('b') ? n.id.slice(0, -1) : n.id + 'b'; return !!p.talents[t]; };
+  const open = (n) => lvlOf(n) === 1 || tree[n.id.charCodeAt(0) - 65].some((x) => lvlOf(x) === lvlOf(n) - 1 && has(x));
+  const second = p.lvl >= SPEC_LVL;
+  const spent = Object.values(p.talents).filter(Boolean).length;
+  const canOpenBranch = (b) => p.spec.includes(b) || (p.spec.length < SPEC_MAX && (p.spec.length === 0 || second));
   const node = (n, b) => {
-    const tier = Number(n.id[1]), has = !!p.talents[n.id], open = tier === 1 || p.talents[n.id[0] + (tier - 1)];
-    const state = has ? 'has' : open && p.points > 0 ? 'can' : open ? 'open' : 'lock';
-    return `<button class="node ${state} ${talSel === n.id ? 'sel' : ''}" data-tal="${n.id}">${icon(n.skill ? SKILLS[n.skill].icon : TALENT_ICONS[p.cls][b])}<span>${L(n.name)}</span></button>`;
+    const lvl = lvlOf(n), br = p.spec.includes(b);
+    let state;
+    if (has(n)) state = 'has';
+    else if (pairTaken(n)) state = 'taken';                       // the other choice on this level won
+    else if (!br && !canOpenBranch(b)) state = 'closed';          // this branch is not open to the hero
+    else if (!open(n)) state = 'lock';                            // the level above is missing
+    else state = p.points > 0 ? 'can' : 'open';
+    const sk = Object.keys(n.eff || {}).find((k) => k.startsWith('skill:'));
+    const ic = sk ? SKILLS[sk.slice(6)].icon : BRANCH_ICONS[p.cls][b];
+    return `<button class="node ${state} ${talSel === n.id ? 'sel' : ''}" data-tal="${n.id}" title="${esc(L(n.name))}">${icon(ic)}<span>${L(n.name)}</span></button>`;
   };
   const sel = tree.flat().find((n) => n.id === talSel);
-  let detail = '';
+  let pop = '';
   if (sel) {
-    const tier = Number(sel.id[1]), has = p.talents[sel.id], open = tier === 1 || p.talents[sel.id[0] + (tier - 1)];
-    detail = `<div class="detail"><h3>${L(sel.name)}</h3><p>${L(sel.desc)}</p>
-      ${sel.skill ? `<p class="muted">${L(SKILLS[sel.skill].desc)} ${t('cd', SKILLS[sel.skill].cd)}</p>` : ''}
-      <div class="actions">${has ? `<span class="muted">${icon('check')} ${t('learned')}</span>` : !open ? `<span class="muted">${icon('lock')} ${t('locked')}</span>` : p.points <= 0 ? `<span class="muted">${t('needPoint')}</span>` : `<button class="btn gold small" data-learn="${sel.id}">${t('learn')}</button>`}</div></div>`;
+    const b = sel.id.charCodeAt(0) - 65, isOpen = open(sel), hasIt = has(sel), taken = pairTaken(sel);
+    const why = hasIt ? `<span class="muted">${icon('check')} ${t('learned')}</span>`
+      : taken ? `<span class="muted">${icon('x')} ${t('specOther')}</span>`
+      : !canOpenBranch(b) ? `<span class="muted">${icon('lock')} ${t('specLocked')}</span>`
+      : !isOpen ? `<span class="muted">${icon('lock')} ${t('locked')}</span>`
+      : p.points <= 0 ? `<span class="muted">${t('needPoint')}</span>`
+      : `<button class="btn gold small" data-learn="${sel.id}">${icon('sparkles')} ${t('learn')}</button>`;
+    pop = `<div class="tpop" style="left:0; top:0">
+      <h3>${L(sel.name)}</h3>
+      <p>${L(sel.desc)}</p>
+      <small class="muted">${L(names[b].name)} · ${t('talLevel', lvlOf(sel))}</small>
+      <div class="row">${why}</div></div>`;
   }
+  const hint = p.spec.length === 0 ? t('specPick') : second ? t('specSecond') : t('specChange', SPEC_LVL);
   openOverlay('tal', `
-    <h2>${icon('sparkles')} ${t('talents')}</h2><p class="points">${t('points', p.points)}</p>
-    <div class="tree">${tree.map((br, b) => `<div class="branch">${br.map((n) => node(n, b)).join('<i class="link"></i>')}</div>`).join('')}</div>
-    ${detail}`);
+    <h2>${icon('sparkles')} ${t('talents')}</h2>
+    <div class="talbar"><span class="points">${t('points', p.points)} <small class="muted">${t('talSpent', spent)}</small></span>
+      <span class="specs">${p.spec.map((b) => `<em>${icon(BRANCH_ICONS[p.cls][b])}${L(names[b].name)}</em>`).join('')}</span></div>
+    <p class="talhint ${p.spec.length ? '' : 'first'}">${icon(p.spec.length ? 'info' : 'hand-pointer')} ${hint}</p>
+    <div class="branches">${tree.map((br, b) => `<div class="branch ${p.spec.includes(b) ? 'mine' : canOpenBranch(b) ? 'free' : 'shut'}">
+      <h4>${icon(BRANCH_ICONS[p.cls][b])} ${L(names[b].name)}${p.spec.includes(b) ? `<i class="tick">${icon('check')}</i>` : ''}</h4>
+      <div class="levels">${Array.from({ length: 10 }, (_, i) => `<div class="lvl"><i>${i + 1}</i><div class="pair">${br.filter((n) => lvlOf(n) === i + 1).map((n) => node(n, b)).join('')}</div></div>`).join('')}</div>
+    </div>`).join('')}</div>
+    ${pop}`);
+  // the card goes right of its node, or left when there is no room, and never off the panel
+  if (sel) {
+    const nodeEl = document.querySelector(`[data-tal="${sel.id}"]`), panel = $('#overlay .panel'), popEl = $('#overlay .tpop');
+    if (nodeEl && popEl) {
+      const n = nodeEl.getBoundingClientRect(), pn = panel.getBoundingClientRect();
+      const w = popEl.offsetWidth, h = popEl.offsetHeight, top = panel.scrollTop;
+      let x = n.right - pn.left + 10, y = n.top - pn.top + top;
+      if (x + w > panel.clientWidth - 10) x = Math.max(10, n.left - pn.left - w - 10);
+      const limit = top + panel.clientHeight - 10;
+      if (y + h > limit) y = Math.max(top + 10, limit - h);
+      popEl.style.left = `${x}px`; popEl.style.top = `${y}px`;
+    }
+  }
 }
 
 function pauseMenu() {
+  const p = g?.player;
+  const stat = p ? `<div class="pausestats">
+    <span>${icon('castle')}${t('floorOf', g.floor, FLOORS)}</span>
+    <span>${icon('skull')}${g.stats.kills}</span>
+    <span>${icon('coins')}${p.gold}</span>
+    <span>${icon('sparkles')}${p.points ? `${p.points} ${t('pointsShort')}` : t('talents')}</span></div>` : '';
   openOverlay('pause', `
     <h2>${t('pause')}</h2>
+    ${stat}
     <div class="menu">
       <button class="btn gold" data-go="close">${icon('play')}<span>${t('resume')}</span></button>
+      ${p ? `<button class="btn" data-go="tal">${icon('sparkles')}<span>${t('talents')}</span><small>${p.points ? `${p.points} ${t('pointsShort')}` : ''}</small></button>
+      <button class="btn" data-go="inv">${icon('backpack')}<span>${t('inventory')}</span></button>
+      <button class="btn" data-go="map">${icon('map')}<span>${t('map')}</span></button>` : ''}
       <button class="btn" data-go="sound">${icon(soundOn() ? 'volume-2' : 'volume-x')}<span>${t('sound')}: ${t(soundOn() ? 'on' : 'off')}</span></button>
       <button class="btn" data-go="shake">${icon('move')}<span>${t('motion')}: ${t(R.shakeOn ? 'on' : 'off')}</span></button>
       <button class="btn" data-go="lang">${icon('settings')}<span>${t('language')}: ${lang.toUpperCase()}</span></button>
@@ -431,7 +610,16 @@ function info() {
 }
 
 function mapView() {
-  openOverlay('map', `<h2>${icon('map')} ${t('map')}</h2><div class="bigmap"></div>`);
+  const p = g.player, act = actOf(g.floor);
+  const marks = [];
+  if (g.merchant) marks.push(`${icon('store')} ${t('merchant')}`);
+  if (g.fountain && !g.fountain.used) marks.push(`${icon('flask-conical')} ${t('fountain')}`);
+  if (g.stairsOpen) marks.push(`${icon('arrow-down-to-line')} ${t('stairsOpen')}`);
+  else marks.push(`${icon('x')} ${t('stairsShut')}`);
+  openOverlay('map', `<h2>${icon('map')} ${t('map')}</h2>
+    <p class="mapmeta">${icon('compass')} ${L(act.name)} · ${t('floorOf', g.floor, FLOORS)} · ${icon('skull')} ${t('mapFoes', g.enemies.filter((e) => !e.ally && e.hp > 0).length)}</p>
+    <div class="bigmap"></div>
+    <div class="maplegend">${marks.map((m) => `<span>${m}</span>`).join('')}</div>`);
   const holder = $('#overlay .bigmap');
   holder.append($('#minimap'));
   R.drawMinimap(true);
@@ -456,10 +644,12 @@ document.addEventListener('click', async (ev) => {
   const el = ev.target.closest('button, [data-go]');
   if (!el) return;
   const go = el.dataset.go;
+  if (el.dataset.close) { closeOverlay(); return; }
   if (el.dataset.cls) { pick.cls = el.dataset.cls; pick.name = $('#hero-name').value; sfx('click'); renderSelect(); return; }
   if (el.dataset.relic != null) { pick.relic = el.dataset.relic || null; pick.name = $('#hero-name').value; renderSelect(); return; }
   if (el.dataset.heir != null) { pick.heir = !!el.dataset.heir; pick.name = $('#hero-name').value; renderSelect(); return; }
-  if (el.dataset.buy) { if (buy(meta, UPGRADES.find((u) => u.id === el.dataset.buy))) { saveMeta(meta); pushMeta(); sfx('level'); renderSanctuary(); } return; }
+  if (el.dataset.shelf) { upTab = upTab === el.dataset.shelf && el.classList.contains('chip') ? 'all' : el.dataset.shelf; renderSanctuary(); return; }
+  if (el.dataset.buyup) { if (buy(meta, UPGRADES.find((u) => u.id === el.dataset.buyup))) { saveMeta(meta); pushMeta(); sfx('level'); renderSanctuary(); } return; }
   if (el.dataset.tab) { hallTab = el.dataset.tab; renderHall(); return; }
   if (el.dataset.skill) { useSkill(el.dataset.skill); return; }
   if (el.dataset.item) { invSel = Number(el.dataset.item); inventory(); return; }
@@ -471,6 +661,8 @@ document.addEventListener('click', async (ev) => {
     return;
   }
   if (el.dataset.tal) { talSel = el.dataset.tal; talents(); return; }
+  if (el.dataset.buy) { if (g && g.buy(Number(el.dataset.buy))) { sfx('pickup'); saveRun(g); } if (overlay === 'shop') shop(); return; }
+  if (el.dataset.sell) { if (g.sell(Number(el.dataset.sell))) { sfx('pickup'); saveRun(g); } shop(); return; }
   if (el.dataset.learn) { if (g.learn(el.dataset.learn)) { sfx('level'); saveRun(g); } talents(); return; }
   switch (go) {
     case 'continue': { const s = loadRun(); if (s) { try { startRun(new Game(s)); } catch (e) { console.error(e); clearRun(); show('title'); } } break; }
@@ -489,6 +681,7 @@ document.addEventListener('click', async (ev) => {
     case 'wait': act({ type: 'wait' }); break;
     case 'descend': act({ type: 'descend' }); break;
     case 'inv': if (overlay === 'inv') closeOverlay(); else { invSel = null; inventory(); } break;
+    case 'shop': if (overlay === 'shop') closeOverlay(); else shop(); break;
     case 'tal': if (overlay === 'tal') closeOverlay(); else { talSel = null; talents(); } break;
     case 'map': if (overlay === 'map') { restoreMinimap(); closeOverlay(); } else mapView(); break;
     case 'pause': if (overlay === 'pause') closeOverlay(); else pauseMenu(); break;
@@ -599,7 +792,7 @@ async function boot() {
     R.frame(now);
   };
   requestAnimationFrame(loop);
-  if (/[?&]debug/.test(location.search)) window.d101 = { get g() { return g; }, R, after, hud, startRun, Game };
+  if (/[?&]debug/.test(location.search)) window.d101 = { get g() { return g; }, R, after, hud, startRun, Game, shop, inventory, talents };
   await R.load(ART);
   Cloud.onChange((u) => { renderAccount(); if (u) pullMeta(); });
   Cloud.restore();

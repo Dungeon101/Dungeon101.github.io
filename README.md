@@ -5,7 +5,7 @@
 <h1 align="center">Dungeon101</h1>
 
 <p align="center">
-  A turn-based roguelite you play in the browser: nine floors, three bosses, one torch.<br>
+  A turn-based roguelite you play in the browser: twenty-seven floors, nine bosses, six heroes, one torch.<br>
   <a href="#english">English</a> · <a href="#italiano">Italiano</a> · <a href="https://dungeon101.github.io">Play</a> · <a href="https://davide-mariotti.github.io/apps/dungeon101/">Website</a>
 </p>
 
@@ -19,12 +19,14 @@
 
 ### What it does
 
-- Nine procedurally generated floors in three acts: the Crypt, the Fungal Caves and the Abyss. Every run has a different map.
+- Twenty-seven procedurally generated floors in nine acts: the Crypt, the Fungal Caves, the Abyss, the Ember Forge, the Drowned Cathedral, the Empty Throne, the Black Cistern, the Ash Kiln and the Last Door. Every run has a different map.
 - Turn-based combat on a grid. You move, everything else moves. Attacks are d20 rolls against armor, with criticals on a natural 20 (earlier for the Rogue).
-- Three heroes: the **Warrior** (Cleave, Shield Bash, Charge), the **Mage** (Firebolt, Frost Nova, Blink) and the **Rogue** (Shadowstep, Poison Blade, Smoke Bomb). Each has a talent tree with three branches.
-- Three bosses with their own tricks: the Bone King raises skeletons, the Broodmother webs you in place, the Ashen Lich teleports away and sets the floor on fire. Their big attacks glow on the ground one turn before they land, so you can step out.
-- Loot in four rarities, chests, healing fountains, scrolls, elites with a purple aura.
-- Permadeath. When you die you keep the embers you earned and spend them in the **Sanctuary** on permanent upgrades. Each boss you kill unlocks a relic you can carry into later runs, and with the Family Vault your best item survives you.
+- Six heroes: the **Warrior** (Cleave, Shield Bash, Charge), the **Mage** (Firebolt, Frost Nova, Blink), the **Rogue** (Shadowstep, Poison Blade, Smoke Bomb), the **Cleric** (Smite, Mend, Sanctuary), the **Paladin** (Aegis, Hammer, Consecrate) and the **Hunter** (Volley, Snare, Beast). Each has five talent branches of ten levels, with two choices on every level.
+- **Specialisations**: a hero opens one branch at the start and a second one from level 10, so a run can be one deep tree or two half trees.
+- Skills cost **mana** instead of a cooldown. Potions stack, a merchant turns up on some floors, and there are 15 relics that level up to five stars when you carry them to the end of a run.
+- Nine bosses with their own tricks: the Bone King raises skeletons, the Broodmother webs you in place, the Ashen Lich teleports away and sets the floor on fire, and six more wait below. Their big attacks glow on the ground one turn before they land, so you can step out. Shots stop at walls and at bodies, for you and for them.
+- Loot in four rarities, chests, healing fountains, sixteen kinds of consumable, elites with a purple aura. The inventory puts a found item and the one you wear on the same rows, so the difference is a number with an arrow.
+- Permadeath. When you die you keep the embers you earned and spend them in the **Sanctuary** on fifty permanent upgrades, each with five levels. Each boss you kill unlocks a relic you can carry into later runs, and with the Family Vault your best item survives you.
 - The run saves itself after every turn: close the tab and pick it up later.
 - Works with keyboard and mouse or on a phone (tap where you want to go). English or Italian, following the browser.
 - Optional Google sign-in to keep your progress in the cloud and send your runs to the Hall of Fame.
@@ -71,7 +73,7 @@ There is nothing to build. Serve the folder with any static server and open it:
 python -m http.server 8101
 ```
 
-`node tests/selftest.mjs 25` checks the floor generator, the save round trip and the progress merge, then plays 25 runs per class with a simple bot and prints how deep it gets. Add `?debug` to the URL to reach the game state from the console (`d101.g`).
+`node tests/selftest.mjs 25` checks the floor generator, the save round trip and the progress merge, then plays 25 runs per class with a simple bot and prints how deep it gets. `node bot.mjs 20` does only the balance pass: average floor reached and what killed each class. `docs/APPUNTI.md` (in Italian) is where the work stands: what changed, how the rules fit together and what is left. Add `?debug` to the URL to reach the game state from the console (`d101.g`).
 
 ### Support
 
@@ -87,12 +89,14 @@ Code under the [MIT license](LICENSE). Icons from [Lucide](https://lucide.dev) (
 
 ### Cosa fa
 
-- Nove piani generati a caso in tre atti: la Cripta, le Grotte Fungine e l'Abisso. Ogni partita ha una mappa diversa.
+- Ventisette piani generati a caso in nove atti: la Cripta, le Grotte Fungine, l'Abisso, la Fornace di Brace, la Cattedrale Sommersa, il Trono Vuoto, la Cisterna Nera, la Fornace di Cenere e l'Ultima Porta. Ogni partita ha una mappa diversa.
 - Combattimento a turni su griglia. Ti muovi tu, si muove tutto il resto. Gli attacchi sono tiri di d20 contro l'armatura, con il critico sul 20 naturale (prima per il Ladro).
-- Tre eroi: il **Guerriero** (Fendente, Colpo di scudo, Carica), la **Maga** (Dardo di fuoco, Nova di gelo, Traslazione) e il **Ladro** (Passo d'ombra, Lama avvelenata, Bomba fumogena). Ognuno ha un albero dei talenti con tre rami.
-- Tre boss con i loro trucchi: il Re d'Ossa rialza gli scheletri, la Madre della Covata ti inchioda con la ragnatela, il Lich di Cenere si teletrasporta e dà fuoco al pavimento. Gli attacchi più forti si illuminano a terra un turno prima, così fai in tempo a spostarti.
-- Bottino in quattro rarità, forzieri, fonti curative, pergamene, nemici élite con l'aura viola.
-- Morte permanente. Quando muori tieni le braci guadagnate e le spendi nel **Santuario** in potenziamenti permanenti. Ogni boss ucciso sblocca una reliquia da portare nelle partite dopo, e con la Cripta di famiglia l'oggetto migliore ti sopravvive.
+- Sei eroi: il **Guerriero** (Fendente, Colpo di scudo, Carica), la **Maga** (Dardo di fuoco, Nova di gelo, Traslazione), il **Ladro** (Passo d'ombra, Lama avvelenata, Bomba fumogena), il **Chierico** (Castigo, Cura, Santuario), il **Paladino** (Egida, Martello, Consacrazione) e il **Cacciatore** (Salva, Tagliola, Bestia). Ognuno ha cinque rami di talenti da dieci livelli, con due scelte a ogni livello.
+- **Specializzazioni**: un eroe apre un ramo all'inizio e il secondo dal livello 10, così una partita può essere un albero solo portato a fondo o due alberi a metà.
+- Le abilità costano **mana** invece di avere una ricarica. Le pozioni si impilano, su certi piani spunta un mercante, e ci sono 15 reliquie che salgono fino a cinque stelle se le porti a fine partita.
+- Nove boss con i loro trucchi: il Re d'Ossa rialza gli scheletri, la Madre della Covata ti inchioda con la ragnatela, il Lich di Cenere si teletrasporta e dà fuoco al pavimento, e sotto ne aspettano altri sei. Gli attacchi più forti si illuminano a terra un turno prima, così fai in tempo a spostarti. I colpi si fermano sui muri e sui corpi, tuoi e loro.
+- Bottino in quattro rarità, forzieri, fonti curative, sedici consumabili, nemici élite con l'aura viola. L'inventario mette l'oggetto trovato e quello indossato sulle stesse righe, così la differenza è un numero con la freccia.
+- Morte permanente. Quando muori tieni le braci guadagnate e le spendi nel **Santuario** in cinquanta potenziamenti permanenti, ognuno a cinque livelli. Ogni boss ucciso sblocca una reliquia da portare nelle partite dopo, e con la Cripta di famiglia l'oggetto migliore ti sopravvive.
 - La partita si salva da sola a ogni turno: chiudi la scheda e riprendi quando vuoi.
 - Si gioca con tastiera e mouse o dal telefono (tocchi dove vuoi andare). In italiano o in inglese, secondo il browser.
 - Accesso con Google facoltativo, per tenere i progressi nel cloud e mandare le partite all'Albo d'onore.
@@ -139,7 +143,7 @@ Non c'è niente da compilare. Basta servire la cartella con un server statico qu
 python -m http.server 8101
 ```
 
-`node tests/selftest.mjs 25` controlla il generatore dei piani, il salvataggio e l'unione dei progressi, poi gioca 25 partite per classe con un bot semplice e dice fin dove arriva. Con `?debug` nell'indirizzo lo stato del gioco è raggiungibile dalla console (`d101.g`).
+`node tests/selftest.mjs 25` controlla il generatore dei piani, il salvataggio e l'unione dei progressi, poi gioca 25 partite per classe con un bot semplice e dice fin dove arriva. `node bot.mjs 20` fa solo il giro di bilanciamento: piano medio raggiunto e cosa ha ucciso ogni classe. In `docs/APPUNTI.md` c'è il punto del lavoro: cosa è cambiato, come stanno insieme le regole e cosa resta da fare. Con `?debug` nell'indirizzo lo stato del gioco è raggiungibile dalla console (`d101.g`).
 
 ### Supporto
 
