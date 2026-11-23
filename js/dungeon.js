@@ -190,14 +190,17 @@ function decorate(m, act, rnd) {
   for (let y = 1; y < m.h - 1; y++) for (let x = 1; x < w - 1; x++) {
     const k = m.t[y * w + x];
     if (k === WALL && floorAt(x, y + 1) && rnd() < (act.id === 'caves' ? 0.03 : 0.06)) {
-      // light on the wall face: torches in the crypt, crystals in the caves, braziers in the abyss
-      const kind = act.id === 'crypt' ? 'torch' : act.id === 'caves' ? 'crystal' : 'brazier';
+      // light on the wall face: torches in the crypt, crystals in the caves, braziers in the abyss and the forge,
+      // cold lamps in the drowned cathedral, sconces on the throne
+      const kind = { crypt: 'torch', caves: 'crystal', abyss: 'brazier', forge: 'brazier', cathedral: 'lantern', throne: 'torch' }[act.id] || 'torch';
       if (!m.deco.some((d) => Math.abs(d.x - x) + Math.abs(d.y - y) < 5 && d.light)) {
         m.deco.push({ x, y, k: kind, light: true });
-        m.lights.push({ x, y: y + 0.6, r: kind === 'crystal' ? 3.5 : 4.5, c: kind === 'crystal' ? [90, 200, 255] : kind === 'torch' ? [255, 150, 60] : [255, 90, 40], flicker: kind !== 'crystal' });
+        const light = { crystal: { r: 3.5, c: [90, 200, 255] }, torch: { r: 4.5, c: [255, 150, 60] }, brazier: { r: 4.5, c: [255, 90, 40] }, lantern: { r: 4, c: [140, 200, 255] } }[kind] || { r: 4.5, c: [255, 150, 60] };
+        m.lights.push({ x, y: y + 0.6, r: light.r, c: light.c, flicker: kind !== 'crystal' && kind !== 'lantern' });
       }
     } else if (k === FLOOR && rnd() < 0.05) {
-      const pool = act.id === 'crypt' ? ['bones', 'skull', 'rubble'] : act.id === 'caves' ? ['mushroom', 'mushroom', 'rubble'] : ['skull', 'rubble', 'ember'];
+      const pool = { crypt: ['bones', 'skull', 'rubble'], caves: ['mushroom', 'mushroom', 'rubble'], abyss: ['skull', 'rubble', 'ember'],
+        forge: ['ember', 'ember', 'rubble'], cathedral: ['rubble', 'bones', 'seaweed'], throne: ['bones', 'skull', 'rubble'] }[act.id] || ['rubble'];
       const kind = pool[ri(rnd, 0, pool.length - 1)];
       m.deco.push({ x, y, k: kind });
       if (kind === 'mushroom' && rnd() < 0.5) m.lights.push({ x, y, r: 2.2, c: [80, 255, 170], flicker: false });

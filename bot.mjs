@@ -2,7 +2,7 @@
 import { Game, itemScore } from './js/game.js';
 import { CLASSES, TALENTS, SKILLS } from './js/data.js';
 import { distanceMap, walkable, canStep, DIRS, dist } from './js/dungeon.js';
-const order = ['B1', 'C1', 'A1', 'B2', 'A2', 'C2', 'B3', 'A3', 'C3'];
+const order = ['B1', 'C1', 'A1', 'B2', 'A2', 'C2', 'B3', 'A3', 'C3', 'B4', 'A4', 'C4'];
 const dropped = new WeakSet();
 export function botTurn(g) {
   const p = g.player, m = g.map, st = g.ps();
@@ -19,7 +19,7 @@ export function botTurn(g) {
     for (const id of g.skills()) {
       if ((p.cds[id] || 0) > 0) continue;
       const sk = SKILLS[id];
-      if (id === 'blink' || id === 'smoke') continue;
+      if (id === 'blink' || id === 'smoke' || id === 'mend' || id === 'beast') continue;
       if (!sk.target) { if (g.act({ type: 'skill', id })) return true; continue; }
       const tg = g.targets(id)[0];
       if (tg && g.act({ type: 'skill', id, x: tg.x, y: tg.y })) return true;
@@ -44,6 +44,9 @@ export function botTurn(g) {
   let best = null, bv = back[p.y * m.w + p.x];
   for (const [dx, dy] of DIRS) { const v = back[(p.y + dy) * m.w + p.x + dx]; if (v >= 0 && v < bv && canStep(m, p.x, p.y, dx, dy)) { bv = v; best = [dx, dy]; } }
   if (best && g.act({ type: 'move', dx: best[0], dy: best[1] })) return true;
+  // no way round, or no way found: the bot is only a measuring tool, so it is allowed to give up on the
+  // chests and the loose loot it cannot reach, otherwise a run stalls and reads as a defeat
+  if (dropped.size < 12 && g.items.length) { for (const o of g.items) dropped.add(o.it); return true; }
   return g.act({ type: 'wait' });
 }
 export function report(runs = 25, only = null) {

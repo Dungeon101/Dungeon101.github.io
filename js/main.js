@@ -19,7 +19,12 @@ let meta = loadMeta();
 let g = null, R = null, screen = 'title', overlay = null;
 let targeting = null, walk = null, focusId = null, held = null, endShown = false;
 const TALENT_ICONS = Object.fromEntries(Object.entries(CLASSES).map(([id, c]) => [id, c.talentIcons]));
-const ART = [...Object.values(CLASSES).map((c) => c.art), ...new Set(Object.values(ENEMIES).map((e) => e.art))];
+// every picture the renderer may need; a file that is missing falls back to a plain token
+const ART = [...new Set([
+  ...Object.values(CLASSES).map((c) => c.art),
+  ...Object.values(ENEMIES).map((e) => e.art),
+  'death', 'victory',
+])];
 
 // ---------- screens ----------
 function show(id) {
@@ -69,7 +74,7 @@ function renderSelect() {
       <button class="card class ${pick.cls === id ? 'sel' : ''}" data-cls="${id}" style="--c:${c.color}">
         <img src="assets/img/${c.art}.webp" alt="" width="160" height="160">
         <h3>${L(c.name)}</h3><p>${L(c.blurb)}</p>
-        <div class="bars"><span>PV ${stat(c.hp, 36)}</span><span>${t('armor')} ${stat(c.ac - 8, 7)}</span><span>${lang === 'it' ? 'Danni' : 'Damage'} ${stat(c.dmg[1] + (id === 'mage' ? 6 : 0), 10)}</span></div>
+        <div class="bars"><span>PV ${stat(c.hp, 42)}</span><span>${t('armor')} ${stat(c.ac - 8, 9)}</span><span>${lang === 'it' ? 'Danni' : 'Damage'} ${stat(c.dmg[1] + (SKILLS[c.skills[0]].target === 'enemy' ? 6 : 0), 13)}</span></div>
         <div class="skill">${icon(SKILLS[c.skills[0]].icon)}<div><b>${L(SKILLS[c.skills[0]].name)}</b><small>${L(SKILLS[c.skills[0]].desc)}</small></div></div>
       </button>`).join('')}</div>
     <div class="row">
@@ -137,7 +142,10 @@ function newRun() {
   const heirloom = pick.heir && meta.vault ? meta.vault : null;
   if (heirloom) meta.vault = null;
   saveMeta(meta); pushMeta();
-  startRun(Game.create({ cls: pick.cls, name, relic: pick.relic, heirloom, meta }));
+  const run = Game.create({ cls: pick.cls, name, relic: pick.relic, heirloom, meta });
+  if (CLASSES[pick.cls].skills.includes('beast')) run.useSkill('beast'); // the hunter's wolf is there from the first turn
+  run.ev.length = 0;
+  startRun(run);
   saveRun(g);
 }
 

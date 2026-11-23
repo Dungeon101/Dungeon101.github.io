@@ -12,6 +12,9 @@ const PALETTE = {
   crypt: { floor: [62, 60, 68], wall: [26, 25, 31], face: [84, 80, 90], mortar: [36, 34, 42], ambient: 0.42, dust: '#9aa4c8' },
   caves: { floor: [52, 64, 54], wall: [22, 30, 26], face: [64, 82, 70], mortar: [30, 40, 34], ambient: 0.44, dust: '#8cf0c0' },
   abyss: { floor: [62, 42, 46], wall: [24, 15, 18], face: [92, 52, 58], mortar: [40, 22, 26], ambient: 0.42, dust: '#ff9a5a' },
+  forge: { floor: [70, 46, 38], wall: [32, 18, 16], face: [104, 58, 44], mortar: [46, 26, 22], ambient: 0.4, dust: '#ffb066' },
+  cathedral: { floor: [44, 56, 66], wall: [20, 28, 38], face: [58, 76, 92], mortar: [26, 36, 46], ambient: 0.4, dust: '#bfe4ff' },
+  throne: { floor: [54, 50, 60], wall: [22, 20, 28], face: [76, 70, 86], mortar: [32, 30, 40], ambient: 0.36, dust: '#d9c8ff' },
 };
 const rgb = (c, k = 1, a = 1) => `rgba(${Math.round(c[0] * k)},${Math.round(c[1] * k)},${Math.round(c[2] * k)},${a})`;
 
@@ -179,6 +182,10 @@ export class Renderer {
           c.fillStyle = i % 2 ? '#3fe8a6' : '#7ff0ff'; c.beginPath(); c.ellipse(mx, my, r, r * 0.6, 0, Math.PI, 0); c.fill();
         }
         break;
+      case 'seaweed':
+        c.strokeStyle = 'rgba(90,180,150,0.75)'; c.lineWidth = 2; c.lineCap = 'round';
+        for (let i = 0; i < 3; i++) { const ox = (hash(d.x, d.y, i) - 0.5) * 20; c.beginPath(); c.moveTo(ox, 10); c.quadraticCurveTo(ox + 6, 0, ox - 2, -10); c.stroke(); }
+        break;
       case 'ember':
         c.fillStyle = 'rgba(255,110,40,0.7)'; for (let i = 0; i < 4; i++) { c.beginPath(); c.arc((hash(d.x, d.y, i) - 0.5) * 24, (hash(d.x, d.y, i + 2) - 0.5) * 20, 1.6, 0, 7); c.fill(); }
         break;
@@ -187,6 +194,10 @@ export class Renderer {
         break;
       case 'brazier':
         c.translate(0, T * 0.2); c.fillStyle = '#2a2224'; c.beginPath(); c.moveTo(-10, -4); c.lineTo(10, -4); c.lineTo(6, 6); c.lineTo(-6, 6); c.closePath(); c.fill(); c.fillRect(-2, 6, 4, 8);
+        break;
+      case 'lantern':
+        c.translate(0, T * 0.15); c.fillStyle = '#243040'; c.fillRect(-3, -6, 6, 4); c.fillStyle = '#3a4a5e'; c.fillRect(-7, 4, 14, 4);
+        c.fillStyle = 'rgba(160,215,255,0.9)'; c.beginPath(); c.moveTo(-5, -2); c.lineTo(5, -2); c.lineTo(4, 4); c.lineTo(-4, 4); c.closePath(); c.fill();
         break;
       case 'crystal':
         c.translate(0, T * 0.18); c.fillStyle = '#5fd0ff'; c.strokeStyle = 'rgba(220,250,255,0.8)'; c.lineWidth = 1;
@@ -274,7 +285,7 @@ export class Renderer {
       case 'venom': this.burst(x, y, '#8cf05a', 24, 1.5, -0.6); this.sfx?.('pickup'); break;
       case 'smoke': this.burst(x, y, '#8d8a99', 70, 2.4, -0.25, false); this.sfx?.('smoke'); break;
       case 'summon': this.ring(x, y, '#b36bff', 1.1); this.burst(x, y, '#b36bff', 20, 2, -0.8); this.sfx?.('summon'); break;
-      case 'blast': this.burst(x, y, e.kind === 'acid' ? '#9cf05a' : e.kind === 'bone' ? '#e8e0c8' : '#ff7a2c', 16, 2.6, -0.5); this.ring(x, y, '#ff5a3c', 0.6); this.sfx?.('boom'); break;
+      case 'blast': this.burst(x, y, e.kind === 'acid' ? '#9cf05a' : e.kind === 'bone' ? '#e8e0c8' : e.kind === 'frost' ? '#bfe4ff' : '#ff7a2c', 16, 2.6, -0.5); this.ring(x, y, e.kind === 'frost' ? '#8fd0ff' : '#ff5a3c', 0.6); this.sfx?.('boom'); break;
       case 'ward': this.ring(x, y, '#9fd0ff', 1); this.burst(x, y, '#cfe8ff', 18, 1.5); break;
       case 'gold': this.burst(x, y, '#ffd36b', 14, 1.6, -0.8); this.sfx?.('gold'); break;
       case 'pickup': this.burst(x, y, RARITIES[e.it.rarity || 0]?.color || '#ffffff', 14, 1.4, -0.8); this.sfx?.('pickup'); break;
@@ -383,6 +394,14 @@ export class Renderer {
       if (!d.light || !this.seenAt(d.x, d.y)) continue;
       const X = d.x * T + T / 2, Y = d.y * T + T / 2 + (d.k === 'torch' ? T * 0.05 : T * 0.12);
       if (d.k === 'crystal') continue;
+      if (d.k === 'lantern') {
+        c.globalCompositeOperation = 'lighter';
+        const lgr = c.createRadialGradient(X, Y - 6, 0, X, Y - 6, 26);
+        lgr.addColorStop(0, 'rgba(200,235,255,0.55)'); lgr.addColorStop(1, 'rgba(120,190,255,0)');
+        c.fillStyle = lgr; c.beginPath(); c.arc(X, Y - 6, 26, 0, 7); c.fill();
+        c.globalCompositeOperation = 'source-over';
+        continue;
+      }
       const f = 1 + Math.sin(now / 90 + d.x) * 0.15 + Math.random() * 0.1;
       c.globalCompositeOperation = 'lighter';
       const gr = c.createRadialGradient(X, Y - 4, 0, X, Y - 4, 12 * f);
@@ -450,7 +469,7 @@ export class Renderer {
     for (const h of this.g.hazards) {
       if (!this.seenAt(h.x, h.y)) continue;
       const X = h.x * T, Y = h.y * T, a = 0.35 + 0.25 * Math.sin(now / 90);
-      const col = h.kind === 'acid' ? '140,240,90' : h.kind === 'bone' ? '235,225,200' : '255,80,40';
+      const col = h.kind === 'acid' ? '140,240,90' : h.kind === 'bone' ? '235,225,200' : h.kind === 'frost' ? '150,215,255' : '255,80,40';
       c.fillStyle = `rgba(${col},${a * 0.5})`; c.fillRect(X + 2, Y + 2, T - 4, T - 4);
       c.strokeStyle = `rgba(${col},${a + 0.3})`; c.lineWidth = 2.5; c.strokeRect(X + 4, Y + 4, T - 8, T - 8);
       const im = iconImage('skull', `rgb(${col})`, 64, 2.4);
@@ -535,7 +554,7 @@ export class Renderer {
   drawShots(c, now) {
     for (let i = this.shots.length - 1; i >= 0; i--) {
       const s = this.shots[i], k = Math.max(0, (now - s.t0) / s.dur);
-      if (k >= 1) { this.shots.splice(i, 1); this.burst(s.x1, s.y1, s.k === 'fire' ? '#ff8a3c' : s.k === 'web' ? '#f0f0f0' : s.k === 'arrow' ? '#d8c8a0' : '#b36bff', 14, 2); continue; }
+      if (k >= 1) { this.shots.splice(i, 1); this.burst(s.x1, s.y1, s.k === 'fire' ? '#ff8a3c' : s.k === 'frost' ? '#9fe4ff' : s.k === 'web' ? '#f0f0f0' : s.k === 'arrow' ? '#d8c8a0' : '#b36bff', 14, 2); continue; }
       const x = (s.x0 + (s.x1 - s.x0) * k) * T + T / 2, y = (s.y0 + (s.y1 - s.y0) * k) * T + T / 2 - Math.sin(k * Math.PI) * (s.k === 'arrow' ? 10 : 0);
       if (s.k === 'arrow' || s.k === 'web') {
         const a = Math.atan2(s.y1 - s.y0, s.x1 - s.x0);
@@ -543,7 +562,7 @@ export class Renderer {
         c.beginPath(); c.moveTo(x - Math.cos(a) * 14, y - Math.sin(a) * 14); c.lineTo(x, y); c.stroke();
         continue;
       }
-      const col = s.k === 'fire' ? [255, 140, 50] : s.k === 'shadow' ? [150, 80, 255] : [190, 90, 255];
+      const col = s.k === 'fire' ? [255, 140, 50] : s.k === 'frost' ? [140, 210, 255] : s.k === 'shadow' ? [150, 80, 255] : [190, 90, 255];
       c.globalCompositeOperation = 'lighter';
       const gr = c.createRadialGradient(x, y, 0, x, y, 18);
       gr.addColorStop(0, 'rgba(255,255,230,1)'); gr.addColorStop(0.3, `rgba(${col},0.9)`); gr.addColorStop(1, `rgba(${col},0)`);

@@ -92,9 +92,9 @@ body[data-screen="game"] #embers { display: none; }
 .page h2 { font-size: clamp(26px, 5vw, 38px); text-align: center; color: var(--gold); text-shadow: 0 0 24px rgba(255, 180, 70, 0.25); }
 .page .actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 8px; }
 .card { background: var(--glass); border: 1px solid var(--line); border-radius: var(--r); backdrop-filter: blur(6px); }
-.classes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.classes { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; }
 .card.class { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 20px 16px; text-align: center; transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s; }
-.card.class img { width: 140px; height: 140px; border-radius: 50%; border: 3px solid var(--c); box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.5), 0 10px 30px rgba(0, 0, 0, 0.6); transition: box-shadow 0.2s; }
+.card.class img { width: 118px; height: 118px; border-radius: 50%; border: 3px solid var(--c); box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.5), 0 10px 30px rgba(0, 0, 0, 0.6); transition: box-shadow 0.2s; }
 .card.class h3 { font-size: 22px; color: var(--c); }
 .card.class p { margin: 0; color: var(--muted); font-size: 13px; min-height: 38px; }
 .card.class.sel { border-color: var(--c); transform: translateY(-4px); box-shadow: 0 0 40px color-mix(in srgb, var(--c) 30%, transparent); }

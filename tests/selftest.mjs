@@ -2,6 +2,7 @@
 // Checks the floor generator and plays whole runs with a simple bot: no exceptions, saves that survive a round trip,
 // and a rough balance report (how deep each class gets).
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import { generate, distanceMap, walkable, canStep, DIRS, dist } from '../js/dungeon.js';
 import { Game, itemScore } from '../js/game.js';
 import { CLASSES, TALENTS, SKILLS, FLOORS, ACTS, ENEMIES, RELICS, isBossFloor, actIndex } from '../js/data.js';
@@ -42,7 +43,7 @@ console.log(`${FLOORS} floors in ${ACTS.length} acts ok`);
 }
 
 // 3. bot runs
-const order = ['B1', 'C1', 'A1', 'B2', 'A2', 'C2', 'B3', 'A3', 'C3'];
+const order = ['B1', 'C1', 'A1', 'B2', 'A2', 'C2', 'B3', 'A3', 'C3', 'B4', 'A4', 'C4'];
 const dropped = new WeakSet(); // the bot does not go back for what it threw away
 function botTurn(g) {
   const p = g.player, m = g.map, st = g.ps();
@@ -51,7 +52,7 @@ function botTurn(g) {
   for (const it of p.bag.filter((x) => x.slot !== 'use').sort((a, b) => itemScore(a) - itemScore(b)).slice(0, Math.max(0, p.bag.length - 12))) { dropped.add(it); g.drop(it.uid); }
   if (p.hp < st.maxHp * 0.4 && p.bag.some((x) => x.kind === 'heal')) return g.quickPotion();
   if (g.onStairs()) return g.act({ type: 'descend' });
-  const foes = g.visibleEnemies().sort((a, b) => dist(a, p) - dist(b, p));
+  const foes = g.visibleEnemies().filter((e) => !e.ally).sort((a, b) => dist(a, p) - dist(b, p));
   // step out of telegraphed tiles
   if (g.hazards.some((h) => h.x === p.x && h.y === p.y)) {
     for (const [dx, dy] of DIRS) if (!g.hazards.some((h) => h.x === p.x + dx && h.y === p.y + dy) && g.act({ type: 'move', dx, dy })) return true;
@@ -60,7 +61,7 @@ function botTurn(g) {
     for (const id of g.skills()) {
       if ((p.cds[id] || 0) > 0) continue;
       const sk = SKILLS[id];
-      if (id === 'blink' || id === 'smoke') continue;
+      if (id === 'blink' || id === 'smoke' || id === 'mend' || id === 'beast') continue;
       if (!sk.target) { if (g.act({ type: 'skill', id })) return true; continue; }
       const tg = g.targets(id)[0];
       if (tg && g.act({ type: 'skill', id, x: tg.x, y: tg.y })) return true;
@@ -86,6 +87,7 @@ function botTurn(g) {
   let best = null, bv = back[p.y * m.w + p.x];
   for (const [dx, dy] of DIRS) { const v = back[(p.y + dy) * m.w + p.x + dx]; if (v >= 0 && v < bv && canStep(m, p.x, p.y, dx, dy)) { bv = v; best = [dx, dy]; } }
   if (best && g.act({ type: 'move', dx: best[0], dy: best[1] })) return true;
+  if (dropped.size < 12 && g.items.length) { for (const o of g.items) dropped.add(o.it); return true; }
   return g.act({ type: 'wait' });
 }
 
@@ -120,7 +122,11 @@ for (const c of Object.keys(TALENTS)) {
   assert.equal(TALENTS[c].length, 3, `${c}: three branches`);
   depths.add(TALENTS[c][0].length);
   for (const b of TALENTS[c]) assert.equal(b.length, TALENTS[c][0].length, `${c}: branches of different depth`);
-  assert.deepEqual(TALENTS[c].map((b) => b.map((n) => n.id[0])), [['A'], ['B'], ['C']].map(([l]) => TALENTS[c].map(() => l)), `${c}: branch letters`);
+  assert.deepEqual(TALENTS[c].map((b) => [...new Set(b.map((n) => n.id[0]))]), [['A'], ['B'], ['C']], `${c}: branch letters`);
+  assert(existsSync(`assets/img/${CLASSES[c].art}.webp`), `${c}: picture assets/img/${CLASSES[c].art}.webp`);
+  const bosses = Object.values(ENEMIES).filter((e) => e.boss);
+  assert.equal(bosses.length, ACTS.length, 'one boss per act');
+  for (const b of bosses) assert(existsSync(`assets/img/${b.art}.webp`), `boss picture ${b.art}`);
   assert.equal(CLASSES[c].talentIcons.length, 3, `${c}: an icon per branch`);
 }
 assert.equal(depths.size, 1, 'every class has the same number of talent tiers');
