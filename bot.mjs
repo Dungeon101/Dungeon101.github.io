@@ -32,7 +32,13 @@ export function botTurn(g) {
     for (const id of g.skills()) {
       if ((p.cds[id] || 0) > 0) continue;
       const sk = SKILLS[id];
-      if (id === 'blink' || id === 'smoke' || id === 'mend' || id === 'beast') continue;
+      if (id === 'blink' || id === 'smoke' || id === 'mend') continue;
+      // the wolf goes out in front of the hero: between him and the nearest enemy
+      if (id === 'beast' || id === 'pack') {
+        const e = foes[0], spot = g.targets(id).filter((c) => dist(c, e) < dist(e, p)).sort((a, b) => dist(a, e) - dist(b, e))[0] || g.targets(id)[0];
+        if (spot && g.act({ type: 'skill', id, x: spot.x, y: spot.y })) return true;
+        continue;
+      }
       if (!sk.target) { if (g.act({ type: 'skill', id })) return true; continue; }
       const tg = g.targets(id)[0];
       if (tg && g.act({ type: 'skill', id, x: tg.x, y: tg.y })) return true;
