@@ -81,6 +81,13 @@ Screenshot di prova: `$TMPDIR/shot2.mjs` (Playwright, talenti e inventario), `sh
 - **Titolo**: la tagline dice 27 piani, nove tiranni, sei eroi; sotto "Nuova partita" il numero di eroi; se hai già giocato, una riga di progressi (partite, piano migliore su 27, potenziamenti comprati su 50, reliquie su 15, vittorie); al primo avvio un suggerimento su come funziona il ciclo morte → braci → Santuario.
 - Meta e `og:description` di `index.html` aggiornati (erano ancora a nove piani).
 
+## Fatto il 25/11
+
+- **Bug veri sistemati** (erano segnalati da Davide): le pozioni non si impilavano oltre la prima (`give()` non divideva una pila più grande di 9, e le pozioni nascevano sfuse: il Satchell ne dava 1+2 separate, i boss una sola, i piani una sola); Salva di frecce colpiva **tutti** i nemici visibili ignorando il bersaglio, ora è un tiro mirato (una freccia, doppio danno, si ferma sul primo corpo) e con Perforante passa oltre, con Fuoco rapido prende chi sta accanto. Stessa famiglia, corretti anche: Punizione e Martello non si potevano mirare, le pergamene di Fuoco e Gelo colpivano tutto lo schermo (ora il più vicino + chi gli sta accanto), il lupo appariva dove capitava (ora esce sulla casella toccata) e il lupo morto restava in campo come muro. TalentI del cacciatore che non facevano niente: Morso sanguinante (il bleed non veniva mai applicato), Tiratore/Perforante/Fuoco rapido (ora contano davvero, con i nuovi modificatori `ranged` e `trap`).
+- **Nuova partita**: reliquie e cimelio non sono più chip col tooltip ma schede con l'effetto scritto, le stelle piene/vuote e "Adesso: livello 2 di 5, … a livello".
+- **Barra abilità**: pulsanti 76×78, nome su due righe dentro il pulsante (niente più "…"), i nomi lunghi scendono a 8,5 px, la barra non esce dallo schermo.
+- `node bot.mjs` (5-6 partite per classe): 0 vittorie, medie 5.2-9.3. Maga e Cacciatore restano i più deboli: il prossimo lavoro è il bilanciamento, dopo aver insegnato al bot cure, scudi e lupo.
+
 ## Cosa resta
 
 1. **Bilanciamento**: la Maga (4,8 di piano medio) e il Cacciatore (4,7) sono indietro rispetto al Paladino (9,3). Il bot però non usa cure, scudi né il lupo, quindi le classi di supporto risultano più deboli di quanto siano in mano a una persona. Da guardare prima con il bot corretto, non con i numeri grezzi.
