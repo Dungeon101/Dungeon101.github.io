@@ -11,7 +11,7 @@ export { xpNext };
 const BAG = 16;
 
 // the stat names a talent may raise (see talentBonus and ps), and the rules a talent may turn on
-export const STAT_KEYS = new Set(['hp', 'ac', 'power', 'hit', 'crit', 'regen', 'sight', 'gold', 'spell', 'pool', 'manaRegen', 'melee', 'shieldMax', 'petPower', 'heal', 'steal']);
+export const STAT_KEYS = new Set(['hp', 'ac', 'power', 'hit', 'crit', 'regen', 'sight', 'gold', 'spell', 'pool', 'manaRegen', 'melee', 'ranged', 'trap', 'shieldMax', 'petPower', 'heal', 'steal']);
 // every flag a talent can raise, listed once here so a typo in data.js fails the tests instead of doing nothing
 export const FLAGS = new Set(('unbreakable lastStand rage concussion trance bloodlust executioner whirlwind shieldwall rampage bloodtrail vanguard ' +
   'unstoppable secondwind packbond lucky kindling pyromancy inferno searing kindled combustion pyre miracle shatter deepfreeze icewall wintergrasp ' +
@@ -102,7 +102,7 @@ export class Game {
     });
     player.equip.weapon = g.makeEquip('weapon', 1, 0, true);
     if (g.bonus.anvil) { player.equip.weapon.power += g.bonus.anvil; player.equip.weapon.tier = Math.min(5, player.equip.weapon.tier + g.bonus.anvil); }
-    for (let i = 0; i < 1 + up('satchel'); i++) player.bag.push(g.makeUse('heal'));
+    g.give(g.makeUse('heal', 1 + up('satchel')));
     if (heirloom && g.bonus.heirloom > 0) {
       const it = { ...heirloom, uid: g.uid++ };
       if (g.bonus.heirloom > 0) { it.power = Math.round((it.power || 0) * (1 + g.bonus.heirloom)); it.ac = Math.round((it.ac || 0) * (1 + g.bonus.heirloom)); }
@@ -164,6 +164,8 @@ export class Game {
       gold: 1 + b.gold + m.gold / 100 + (tb.gold || 0) / 100 + (F.has('lucky') ? 0.25 : 0) + (this.relic === 'coin' ? 0.2 * this.rl() : 0),
       light: 7 + b.light + m.light + (tb.sight || 0) + (this.relic === 'lantern' ? this.rl() : 0),
       melee: 1 + (tb.melee || 0) / 100, spell: 1 + (tb.spell || 0) / 100 + (b.spell || 0), heal: 1 + (tb.heal || 0) / 100,
+      // arrows and spells cast at range, and the traps that wait on the floor
+      ranged: 1 + (tb.ranged || 0) / 100, trap: 1 + (tb.trap || 0) / 100,
       shieldMax: 1 + (tb.shieldMax || 0) / 100, petPower: 1 + (tb.petPower || 0) / 100 + (b.companion || 0),
       dodge: b.dodge || 0, thorns: b.thorns || 0, pierce: b.pierce || 0, bleed: b.bleed || 0,
       executioner: b.executioner || 0, firstblood: b.firstblood || 0, critpower: b.critpower || 0,
@@ -312,8 +314,14 @@ export class Game {
   give(it) {
     const p = this.player;
     if (it.slot === 'use') {
+      // the first stack of the same potion that has room: nine is the most that piles up
       const same = p.bag.find((x) => x.slot === 'use' && x.kind === it.kind && (x.n || 1) < 9);
-      if (same) { same.n = (same.n || 1) + (it.n || 1); return same; }
+      if (same) {
+        const room = 9 - (same.n || 1), moved = Math.min(room, it.n || 1);
+        same.n = (same.n || 1) + moved;
+        if (moved < (it.n || 1)) { const rest = { ...it, uid: this.uid++, n: (it.n || 1) - moved }; return this.give(rest) || same; }
+        return same;
+      }
     }
     if (p.bag.length >= BAG) return null;
     p.bag.push(it);
@@ -341,9 +349,10 @@ export class Game {
     }
     const same = it.slot === 'use' && p.bag.find((x) => x.slot === 'use' && x.kind === it.kind && (x.n || 1) < 9);
     if (!same && p.bag.length >= BAG) { this.items.push({ x, y, it }); this.say(t('lFull', itemName(it))); return false; }
-    this.give(it);
+    const stacked = this.give(it);
     this.say(t('lPick', itemName(it)), 'loot');
-    this.emit({ t: 'fx', k: 'pickup', x, y, it });
+    // the pickup animation carries the stack, so two potions read as "×2" instead of one more of something
+    this.emit({ t: 'fx', k: 'pickup', x, y, it: stacked || it });
     return true;
   }
 
@@ -396,7 +405,7 @@ export class Game {
       if (it.kind === 'heal') potions++;
       this.items.push({ ...c, it });
     }
-    if (!potions && n % 2 && free.length) this.items.push({ ...take(), it: this.makeUse('heal') });
+    if (!potions && n % 2 && free.length) this.items.push({ ...take(), it: this.makeUse('heal', 1 + rint(0, 2)) });
     for (let i = 0, k = 3 + rint(0, 2); i < k && free.length; i++) this.items.push({ ...take(), it: { kind: 'gold', n: rint(4, 9) * n } });
     for (let i = 0, k = rint(1, 2); i < k && free.length; i++) {
       const c = take();
@@ -581,7 +590,7 @@ export class Game {
     if (isP && p.st.invis > 0) { crit = true; p.st.invis = 0; }
     if (isP && (F.has('ambush') || F.has('ghost')) && !d.touched) crit = true;
     // Piercing Blows: the hero's hits go through a few points of the enemy's armour
-    const hitBonus = isP ? st.hit : a.hit, ac = (isP ? d.ac - (st.pierce || 0) : st.ac);
+    const hitBonus = (isP ? st.hit : a.hit) + (o.hitBonus || 0), ac = (isP ? d.ac - (st.pierce || 0) : st.ac);
     const hit = o.sure || crit || (roll !== 1 && roll + hitBonus >= ac);
     if (o.kind && o.kind !== 'melee' && o.kind !== 'spell') this.emit({ t: 'shot', a: a.id, d: d.id, k: o.kind, x0: a.x, y0: a.y, x1: d.x, y1: d.y });
     else if (o.kind !== 'spell') this.emit({ t: 'atk', a: a.id, d: d.id });
@@ -595,7 +604,7 @@ export class Game {
     let n = o.base != null ? o.base : rint(...(isP ? st.dmg.map((x) => x + st.power) : a.dmg));
     n += o.flat || 0;
     if (isP && o.kind === 'spell') n *= st.spell;
-    if (isP && o.kind !== 'spell') n *= st.melee;
+    if (isP && o.kind !== 'spell') n *= st.melee * (o.ranged ? st.ranged : 1);
     if (isP && F.has('wrath') && o.kind === 'spell') n *= 1.2;
     if (crit) n *= (isP && F.has('assassin') ? 3 : 2) * (isP && st.critpower ? 1 + st.critpower : 1);
     n *= o.mult || 1;
@@ -722,6 +731,8 @@ export class Game {
       return;
     }
     this.enemies = this.enemies.filter((x) => x !== e);
+    // a wolf that dies next to the hero leaves a body in the way: it has to leave the field too
+    if (this.pets().includes(e)) { this.enemies = this.enemies.filter((x) => x !== e); this.say(t('lPetDown'), 'bad'); this.pet = this.pets()[0] || null; return; }
     this.stats.kills++;
     this.say(t('lKill', this.ename(e)), 'kill');
     this.emit({ t: 'die', id: e.id, x: e.x, y: e.y, type: e.type, boss: e.boss, elite: e.elite });
@@ -732,7 +743,7 @@ export class Game {
     const drop = (it) => { const c = this.blocked(e.x, e.y) || this.items.some((i) => i.x === e.x && i.y === e.y) ? this.freeNear(e.x, e.y)[0] : e; if (c) this.items.push({ x: c.x, y: c.y, it }); };
     if (e.boss) {
       drop(this.makeEquip(pick(['weapon', 'armor', 'trinket']), 1, 2));
-      drop(this.makeUse('heal'));
+      drop(this.makeUse('heal', 2));
       drop({ kind: 'gold', n: 40 * this.floor });
       this.stats.bosses.push(e.type);
       this.emit({ t: 'shake', p: 14 });
@@ -797,6 +808,12 @@ export class Game {
     const p = this.player, sk = SKILLS[id], m = this.map;
     if (sk.target === 'adjacent') return this.enemies.filter((e) => dist(e, p) === 1 && (e.x === p.x || e.y === p.y || (tile(m, e.x, p.y) !== WALL && tile(m, p.x, e.y) !== WALL)));
     if (sk.target === 'enemy') return this.visibleEnemies().filter((e) => !e.ally && dist(e, p) <= sk.range && this.laneClear(p, e, sk.block)).sort((a, b) => dist(a, p) - dist(b, p));
+    // Hammerfall: the enemy you tapped, or the nearest one if you tapped the floor, plus whoever stands next to you
+    if (sk.target === 'enemyAround') {
+      const list = this.enemies.filter((e) => !e.ally && e.hp > 0 && dist(e, p) === 1);
+      const near = this.visibleEnemies().filter((e) => !e.ally && dist(e, p) <= sk.range && this.laneClear(p, e, sk.block)).sort((a, b) => dist(a, p) - dist(b, p));
+      return list.concat(near.filter((e) => !list.includes(e)));
+    }
     if (sk.target === 'tile') {
       const out = [];
       for (let y = p.y - sk.range; y <= p.y + sk.range; y++) for (let x = p.x - sk.range; x <= p.x + sk.range; x++)
@@ -812,10 +829,11 @@ export class Game {
     let target = null;
     if (sk.target) {
       target = this.targets(id).find((c) => c.x === x && c.y === y);
+      // a spell that only reaches the next tile fires at whatever is there, no aiming needed
+      if (!target && sk.target === 'enemyAround' && sk.range === 1) target = this.targets(id)[0] || null;
       if (!target) {
         // there is something in the way: say so instead of "no target", the two feel very different
-        const blocked = this.visibleEnemies().find((e) => e.x === x && e.y === y && dist(e, p) <= sk.range);
-        this.say(blocked ? t('lInTheWay') : t('lNoTarget'));
+        this.say(this.noTargetWhy(id, x, y));
         return false;
       }
     }
@@ -886,8 +904,10 @@ export class Game {
         for (const e of this.enemies) if (!e.ally) e.awake = false;
         break;
       // ---------- cleric ----------
+      // Punizione is a bolt of light: it leaves your hand, so the first body in the way takes it
       case 'smite': {
-        const list = F.has('shatter') ? adjacent() : [target];
+        const list = F.has('shatter') ? adjacent().concat(target && dist(target, p) === 1 ? [] : [target]) : [target];
+        this.emit({ t: 'shot', a: p.id, d: target.id, k: 'holy', x0: p.x, y0: p.y, x1: target.x, y1: target.y });
         if (!list.length) { this.say(t('lNoTarget')); return false; }
         this.emit({ t: 'fx', k: 'cleave', x: p.x, y: p.y });
         for (const e of list) {
@@ -929,31 +949,41 @@ export class Game {
         this.say(t('lConsecrate'), 'good'); this.emit({ t: 'fx', k: 'nova', x: p.x, y: p.y });
         break;
       // ---------- hunter ----------
+      // Volley is the hunter's aimed shot: one arrow, twice the punch of a normal one, at the enemy you chose
       case 'volley': {
-        const list = this.visibleEnemies().filter((e) => !e.ally);
-        if (!list.length) { this.say(t('lNoTarget')); return false; }
-        for (const e of list) {
-          this.emit({ t: 'shot', a: p.id, d: e.id, k: 'arrow', x0: p.x, y0: p.y, x1: e.x, y1: e.y });
-          this.strike(p, e, { flat: 2 });
+        const bonus = F.has('marksman') ? 2 : 0;
+        const hit = (e, x0, y0) => { this.emit({ t: 'shot', a: p.id, d: e.id, k: 'arrow', x0, y0, x1: e.x, y1: e.y }); this.strike(p, e, { mult: 2, ranged: true, hitBonus: bonus }); };
+        // the arrow stops at the first body in the way, whoever it is: no shooting through a friend
+        const body = this.bodyBetween(p, target);
+        if (body && body !== target) {
+          hit(body, p.x, p.y);
+          this.say(t('lInTheWay'));
+          if (body.hp <= 0 && target.hp > 0 && F.has('piercing')) hit(target, body.x, body.y); // Piercing: on through to the one behind
+          break;
         }
+        hit(target, p.x, p.y);
+        // Rapid Fire: a second arrow at whoever stands next to the one you chose
+        if (F.has('rapidfire')) {
+          const side = this.enemies.find((e) => !e.ally && e.hp > 0 && e !== target && dist(e, target) === 1 && this.laneClear(p, e, 'arrow'));
+          if (side) hit(side, p.x, p.y);
+        }
+        if (target.hp > 0 && F.has('toxicity')) this.poison(target, 2, 3);
         break;
       }
       case 'snare':
         this.emit({ t: 'shot', a: p.id, d: target.id, k: 'web', x0: p.x, y0: p.y, x1: target.x, y1: target.y });
         target.st.web = target.boss ? 1 : 3;
-        this.poison(target, F.has('toxicity') ? 4 : 3, F.has('toxicity') ? 6 : 4);
+        const dmg = Math.round((F.has('toxicity') ? 4 : 3) * st.trap);
+        this.poison(target, dmg, F.has('toxicity') ? 6 : 4);
         this.say(t('lSnare', this.ename(target)), 'good');
         break;
-      case 'beast': {
-        if (this.pets().length >= (this.skills().includes('pack') ? 2 : 1)) { this.say(t('lNoTarget')); return false; }
-        const spot = this.freeNear(p.x, p.y, 2)[0];
-        if (!spot) { this.say(t('lNoTarget')); return false; }
-        this.summonWolf(spot);
-        break;
-      }
+      // the wolf comes out on the tile you tapped, so you can put it between yourself and an archer
+      case 'beast':
       case 'pack': {
-        if (this.pets().length >= 2) { this.say(t('lNoTarget')); return false; }
-        const spot = this.freeNear(p.x, p.y, 2)[0];
+        const most = id === 'pack' || this.skills().includes('pack') ? 2 : 1;
+        if (this.pets().length >= most) { this.say(t('lNoTarget')); return false; }
+        const spot = this.enemies.some((e) => e.hp > 0 && e.x === x && e.y === y) ? null
+          : this.blocked(x, y) ? this.freeNear(p.x, p.y, 2)[0] : { x, y };
         if (!spot) { this.say(t('lNoTarget')); return false; }
         this.summonWolf(spot);
         break;
@@ -982,7 +1012,7 @@ export class Game {
         break;
       }
       case 'blizzard': {
-        const list = this.visibleEnemies();
+        const list = this.visibleEnemies().filter((e) => !e.ally);
         if (!list.length) { this.say(t('lNoTarget')); return false; }
         for (const e of list) {
           e.st.frozen = Math.max(e.st.frozen || 0, e.boss ? 1 : 2);
@@ -1009,17 +1039,18 @@ export class Game {
         break;
       }
       case 'rain': {
-        const list = this.visibleEnemies().filter((e) => this.laneClear(p, e, 'arrow'));
+        const list = this.visibleEnemies().filter((e) => !e.ally && this.laneClear(p, e, 'arrow'));
         if (!list.length) { this.say(t('lNoTarget')); return false; }
+        const bonus = F.has('marksman') ? 2 : 0;
         for (const e of list) for (let i = 0; i < 2; i++) {
           this.emit({ t: 'shot', a: p.id, d: e.id, k: 'arrow', x0: p.x, y0: p.y, x1: e.x, y1: e.y });
-          this.strike(p, e, { flat: 3 });
+          this.strike(p, e, { flat: 3, ranged: true, hitBonus: bonus });
         }
         this.say(t('lRain'), 'good');
         break;
       }
       case 'beartrap':
-        this.hazards.push({ x: target.x, y: target.y, kind: 'trap', dmg: rint(10, 16) + Math.floor(p.lvl * 1.5), hold: 2, owner: 'player' });
+        this.hazards.push({ x: target.x, y: target.y, kind: 'trap', dmg: Math.round((rint(10, 16) + Math.floor(p.lvl * 1.5)) * st.trap), hold: 2, owner: 'player' });
         this.emit({ t: 'fx', k: 'chest', x: target.x, y: target.y });
         this.say(t('lBeartrap'), 'good');
         break;
@@ -1052,11 +1083,14 @@ export class Game {
         this.heal(Math.round(st.maxHp * (1 + (this.bonus.potency || 0)))); p.st.poison = 0; p.st.burn = 0;
         this.emit({ t: 'fx', k: 'potion', x: p.x, y: p.y });
         break;
-      case 'food':
-        if (p.hp >= st.maxHp && !this.pets().length) return false;
+      case 'food': {
+        // eaten for a wound, or given to a wolf that is hurt
+        const wolf = this.pets().find((w) => w.hp < w.maxHp);
+        if (p.hp >= st.maxHp && !wolf) return false;
         this.heal(Math.round(Math.round(st.maxHp / 4) * (1 + (this.bonus.potency || 0))));
         for (const pet of this.pets()) pet.hp = Math.min(pet.maxHp, pet.hp + Math.round(pet.maxHp / 3));
         break;
+      }
       case 'mana':
         if (p.mp >= this.manaPool()) return false;
         p.mp = Math.min(this.manaPool(), p.mp + Math.ceil(this.manaPool() / 2));
@@ -1067,20 +1101,25 @@ export class Game {
         if (!p.st.poison && !p.st.burn) return false;
         p.st.poison = 0; p.st.burn = 0; this.say(t('lAntidote'), 'good');
         break;
+      // a scroll lands on the nearest enemy you can see, and catches whatever stands next to it
       case 'fire': {
-        const list = this.visibleEnemies();
-        if (!list.length) { this.say(t('lNoTarget')); return false; }
+        const near = (e) => dist(e, p) <= 1;
+        const c = this.visibleEnemies().filter((e) => !e.ally && !near(e) && this.laneClear(p, e, 'arrow')).sort((a, b) => dist(a, p) - dist(b, p))[0];
+        if (!c) { this.say(t('lNoTarget')); return false; }
         this.say(t('lScrollFire'), 'good');
-        for (const e of list) {
-          this.emit({ t: 'fx', k: 'explode', x: e.x, y: e.y });
+        this.emit({ t: 'fx', k: 'explode', x: c.x, y: c.y });
+        for (const e of this.enemies.filter((e) => !e.ally && e.hp > 0 && dist(e, c) <= 1)) {
+          if (e !== c) this.emit({ t: 'fx', k: 'explode', x: e.x, y: e.y });
           this.strike(p, e, { sure: true, kind: 'spell', base: rint(8, 14) + this.floor * 2 });
         }
         break;
       }
       case 'frost': {
-        const list = this.visibleEnemies();
-        if (!list.length) { this.say(t('lNoTarget')); return false; }
-        for (const e of list) { e.st.frozen = e.boss ? 1 : 2; this.emit({ t: 'fx', k: 'nova', x: e.x, y: e.y }); }
+        const c = this.visibleEnemies().filter((e) => !e.ally && dist(e, p) > 1).sort((a, b) => dist(a, p) - dist(b, p))[0];
+        if (!c) { this.say(t('lNoTarget')); return false; }
+        for (const e of this.enemies.filter((e) => !e.ally && e.hp > 0 && dist(e, c) <= 1)) {
+          e.st.frozen = e.boss ? 1 : 2; this.emit({ t: 'fx', k: 'nova', x: e.x, y: e.y });
+        }
         this.say(t('lScrollFrost'), 'good');
         break;
       }
@@ -1292,6 +1331,41 @@ export class Game {
   // What a shot has to get through to land: walls stop everything, and so does the first body in the way
   // (a wall of friends, a summoned wolf, a hero hiding behind a pillar). Fire and frost burn the first thing
   // they meet instead of flying on; arrows and bolts are stopped by a body and nothing else.
+  // The first body between a shooter and a target, or null if the way is clear. Wolves and enemies both count:
+  // nothing shoots through a friend.
+  bodyBetween(from, to) {
+    const m = this.map;
+    let x = from.x, y = from.y;
+    const dx = Math.abs(to.x - x), dy = -Math.abs(to.y - y), sx = Math.sign(to.x - x), sy = Math.sign(to.y - y);
+    let err = dx + dy;
+    for (let guard = 0; guard < 200; guard++) {
+      const e2 = 2 * err;
+      if (e2 >= dy) { err += dy; x += sx; }
+      if (e2 <= dx) { err += dx; y += sy; }
+      if (x === to.x && y === to.y) return null;
+      if (tile(m, x, y) === WALL) return null;
+      const body = this.enemies.find((e) => e.hp > 0 && e.x === x && e.y === y) || (this.player.x === x && this.player.y === y ? this.player : null);
+      if (body) return body;
+    }
+    return null;
+  }
+  // Can the hero shoot at this enemy from where they stand? Range, line of sight, and no body in between.
+  aimable(e, range = 99) {
+    const p = this.player;
+    if (!e || e.ally || e.hp <= 0) return false;
+    if (!this.vis[e.y * this.map.w + e.x]) return false;
+    if (dist(e, p) > range || dist(e, p) < 2) return false; // the next tile is a punch, not an arrow
+    return this.laneClear(p, e, 'arrow');
+  }
+  // Why a click on an enemy did nothing: it is not there, it is too far, or a friend is standing in the way
+  noTargetWhy(id, x, y) {
+    const sk = SKILLS[id], p = this.player;
+    const e = this.enemies.find((c) => !c.ally && c.hp > 0 && c.x === x && c.y === y);
+    if (!e) return t('lNoTarget');
+    if (dist(e, p) > (sk.range || 1)) return t('lNoTarget');
+    return this.bodyBetween(p, e) ? t('lInTheWay') : t('lNoTarget');
+  }
+
   laneClear(from, to, kind) {
     const m = this.map;
     let x = from.x, y = from.y;
@@ -1442,7 +1516,7 @@ export class Game {
         if (e.ally || e.hp <= 0 || e.x !== h.x || e.y !== h.y) continue;
         this.emit({ t: 'fx', k: 'blast', x: h.x, y: h.y, kind: 'trap' });
         this.damage(e, h.dmg, false, p);
-        e.st.stun = Math.max(e.st.stun || 0, h.hold);
+        e.st.stun = Math.max(e.st.stun || 0, h.hold + (this.flags().has('pittrap') ? 1 : 0));
         h.done = true;
       }
       if (h.kind === 'miasma') {

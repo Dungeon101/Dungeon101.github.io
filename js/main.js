@@ -89,12 +89,27 @@ function renderSelect() {
       <label class="field"><span>${t('heroName')}</span><input id="hero-name" maxlength="16" value="${esc(pick.name)}" autocomplete="off" spellcheck="false"></label>
       <button class="btn icon-only" data-go="reroll" aria-label="Random">${icon('rotate-ccw')}</button>
     </div>
-    ${relics.length ? `<div class="pickrow"><span>${t('relic')}</span>
-      <button class="chip ${!pick.relic ? 'sel' : ''}" data-relic="">${t('noRelic')}</button>
-      ${relics.map(([id, r]) => `<button class="chip ${pick.relic === id ? 'sel' : ''}" data-relic="${id}" title="${esc(L(r.desc))}">${icon(r.icon)} ${L(r.name)} <em class="lv">${'★'.repeat(meta.relics[id] || 1)}</em></button>`).join('')}</div>` : ''}
-    ${vault ? `<div class="pickrow"><span>${t('heirloom')}</span>
-      <button class="chip ${pick.heir ? 'sel' : ''}" data-heir="1" style="color:${RARITIES[vault.rarity].color}">${icon(SLOT_ICON[vault.slot])} ${esc(itemName(vault))}</button>
-      <button class="chip ${!pick.heir ? 'sel' : ''}" data-heir="">${t('noHeirloom')}</button></div>` : ''}
+    ${relics.length ? `<div class="pickbox">
+      <span class="picklabel">${icon('gem')} ${t('relic')}</span>
+      <div class="picks">${relics.map(([id, r]) => {
+        const lv = meta.relics[id] || 1;
+        return `<button class="pick ${pick.relic === id ? 'sel' : ''}" data-relic="${id}" style="--c:#d8b25a">
+          <b>${icon(r.icon)} ${L(r.name)} <em class="lv">${'★'.repeat(lv)}<i>${'★'.repeat(Math.max(0, RELIC_MAX - lv))}</i></em></b>
+          <small>${esc(L(r.desc))}</small>
+          <span class="now">${t('relicNow', lv, esc(L(r.per)), RELIC_MAX)}</span>
+        </button>`;
+      }).join('')}
+      <button class="pick ${!pick.relic ? 'sel' : ''}" data-relic=""><b>${icon('x')} ${t('noRelic')}</b><small>${t('noRelicWhy')}</small></button></div></div>` : ''}
+    ${vault ? `<div class="pickbox">
+      <span class="picklabel">${icon(SLOT_ICON[vault.slot])} ${t('heirloom')}</span>
+      <div class="picks">
+        <button class="pick ${pick.heir ? 'sel' : ''}" data-heir="1" style="--c:${RARITIES[vault.rarity].color}">
+          <b>${icon(SLOT_ICON[vault.slot])} ${esc(itemName(vault))}</b>
+          <small>${itemLines(vault).map(esc).join(' · ')}</small>
+          <span class="now">${t('heirloomNow')}</span>
+        </button>
+        <button class="pick ${!pick.heir ? 'sel' : ''}" data-heir=""><b>${icon('x')} ${t('noHeirloom')}</b><small>${t('noHeirloomWhy')}</small></button>
+      </div></div>` : ''}
     <div class="actions"><button class="btn" data-go="title">${icon('x')}<span>${t('back')}</span></button>
     <button class="btn gold big" data-go="begin">${icon('arrow-down-to-line')}<span>${t('begin')}</span></button></div>`;
 }
@@ -294,7 +309,9 @@ function useSkill(id) {
   if (targeting && targeting.id === id) { confirmTarget(); return; }
   const list = g.targets(id);
   if (!list.length) { g.say(t('lNoTarget')); hud(); pulse(`[data-skill="${id}"]`); return; }
-  if (list.length === 1 && sk.target !== 'tile') { act({ type: 'skill', id, x: list[0].x, y: list[0].y }); return; }
+  if (list.length === 1 && sk.target !== 'tile' && sk.target !== 'enemy') { act({ type: 'skill', id, x: list[0].x, y: list[0].y }); return; }
+  // a shot always asks which enemy, even when there is only one: aiming is half the fight
+  if (sk.target === 'enemy') { targeting = { id, list, sel: list[0] }; R.targets = { list, sel: list[0] }; $('#hint').textContent = t('targetHint'); $('#hint').classList.add('on'); hud(); return; }
   let sel = list[0];
   if (sk.target === 'tile') { // default: the reachable tile farthest from the closest enemy
     const foes = g.visibleEnemies();
@@ -324,7 +341,8 @@ function cycleTarget(dir = 1) {
 function tapTile(tx, ty) {
   if (!g || g.over || overlay) return;
   const p = g.player, m = g.map;
-  if (targeting) { const c = targeting.list.find((q) => q.x === tx && q.y === ty); if (c) confirmTarget(c); else cancelTarget(); return; }
+  // while aiming, a tap on the floor keeps the aim (you were probably trying to hit an enemy and missed the tile)
+  if (targeting) { const c = targeting.list.find((q) => q.x === tx && q.y === ty); if (c) confirmTarget(c); return; }
   if (tx === p.x && ty === p.y) { if (g.onStairs()) act({ type: 'descend' }); else act({ type: 'wait' }); return; }
   const dx = tx - p.x, dy = ty - p.y;
   if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1) { act({ type: 'move', dx, dy }); return; }
@@ -378,10 +396,12 @@ function hud() {
   $('#skills').innerHTML = c.skills.map((id, i) => {
     const sk = SKILLS[id], k = known.includes(id), cd = p.cds[id] || 0, cost = g.skillCost(id), poor = k && !cd && p.mp < cost;
     const why = !k ? 'locked' : cd ? 'cool' : poor ? 'poor' : '';
-    return `<button class="act ${why} ${targeting?.id === id ? 'aim' : ''}" data-skill="${id}" ${!k ? 'disabled' : ''} title="${esc(L(sk.name) + ' · ' + L(sk.desc))}" aria-label="${esc(L(sk.name))}">
+    // the name gets two lines, and a name too long for them shrinks instead of turning into "..."
+    const nm = L(sk.name);
+    return `<button class="act ${why} ${targeting?.id === id ? 'aim' : ''} ${nm.length > 17 ? 'long' : ''}" data-skill="${id}" ${!k ? 'disabled' : ''} title="${esc(nm + ' · ' + L(sk.desc))}" aria-label="${esc(nm)}">
       <kbd>${i + 1}</kbd>${icon(k ? sk.icon : 'lock')}
       ${cd ? `<em class="cd">${cd}</em>` : k ? `<em class="cost ${poor ? 'poor' : ''}" title="${t('mana')}">${cost}</em>` : ''}
-      <span>${L(sk.name)}</span></button>`;
+      <span>${nm}</span></button>`;
   }).join('') + `
     <button class="act potion ${potions ? '' : 'locked'}" data-go="potion" title="${esc(L(CONSUMABLES.heal.name))}" aria-label="${t('potion')}">${icon('flask-conical')}<kbd>4</kbd>${potions ? `<em class="n">${potions}</em>` : ''}<span>${t('potion')}</span></button>
     <button class="act" data-go="wait" title="${t('wait')}" aria-label="${t('wait')}">${icon('hourglass')}<kbd>5</kbd><span>${t('wait')}</span></button>
@@ -714,6 +734,7 @@ addEventListener('keydown', (e) => {
     if (k === 'Tab' || k === 'ArrowRight' || k === 'ArrowDown') { e.preventDefault(); cycleTarget(e.shiftKey ? -1 : 1); return; }
     if (k === 'ArrowLeft' || k === 'ArrowUp') { e.preventDefault(); cycleTarget(-1); return; }
     if (k === 'Enter' || k === 'Space') { e.preventDefault(); confirmTarget(); return; }
+    if (k === 'Escape') { e.preventDefault(); cancelTarget(); return; }
   }
   const skills = CLASSES[g.player.cls].skills;
   if (k === 'Digit1' || k === 'Digit2' || k === 'Digit3') { useSkill(skills[Number(k[5]) - 1]); return; }
