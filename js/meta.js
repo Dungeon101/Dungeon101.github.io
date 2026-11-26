@@ -51,6 +51,7 @@ export function mergeMeta(a, b) {
   const [hi, lo] = (a.earned || 0) >= (b.earned || 0) ? [a, b] : [b, a];
   const out = { ...blankMeta(), ...hi, relics: { ...lo.relics, ...hi.relics }, stats: { ...blankMeta().stats, ...hi.stats } };
   for (const k of Object.keys(out.stats)) out.stats[k] = Math.max(hi.stats?.[k] || 0, lo.stats?.[k] || 0);
+  for (const k of Object.keys(out.relics)) out.relics[k] = Math.max(hi.relics?.[k] || 0, lo.relics?.[k] || 0);
   const seen = new Set();
   out.history = [...(hi.history || []), ...(lo.history || [])].filter((r) => !seen.has(r.at) && seen.add(r.at)).sort((x, y) => y.at - x.at).slice(0, 12);
   return out;

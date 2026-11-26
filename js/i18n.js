@@ -2,27 +2,27 @@
 const STR = {
   en: {
     tagline: 'Twenty-seven floors. Nine tyrants. Six heroes. One torch.',
-    titleClasses: '{0} heroes', titleRuns: '{0} runs', titleBest: 'best floor {0} of {1}', titleUpgrades: '{0} of {1} upgrades', titleRelics: '{0} of {1} relics', titleWins: '{0} won', titleFirst: 'First time here? Pick a hero, die a lot, and spend what you keep in the Sanctuary.',
+    titleClasses: '{0} heroes', titleRuns: '{0} run|{0} runs', titleBest: 'best floor {0} of {1}', titleUpgrades: '{0} of {1} upgrades', titleRelics: '{0} of {1} relics', titleWins: '{0} won', titleFirst: 'First time here? Pick a hero, die a lot, and spend what you keep in the Sanctuary.',
     continue: 'Continue run', newRun: 'New run', sanctuary: 'Sanctuary', hall: 'Hall of Fame', back: 'Back',
     signIn: 'Sign in with Google', signOut: 'Sign out', signedAs: 'Synced as {0}', offline: 'Progress is saved in this browser.',
     cloudOff: 'Cloud unavailable right now. Your progress is safe in this browser.',
-    chooseClass: 'Choose your hero', heroName: 'Hero name', begin: 'Descend', relic: 'Relic', noRelic: 'No relic', relicNow: 'Right now: level {0} of {2}, {1} a level', noRelicWhy: 'Go in with nothing and find your own way down.', heirloom: 'Family vault', heirloomNow: 'It comes into the run with you, and the Sanctuary makes it stronger', noHeirloomWhy: 'Leave it in the vault and keep it for another hero.',
+    chooseClass: 'Choose your hero', heroName: 'Hero name', begin: 'Descend', relic: 'Relic', noRelic: 'No relic', relicNow: 'Right now: level {0} of {2}, {1} a level', noRelicWhy: 'Go in with nothing and find your own way down.', heirloomNow: 'It comes into the run with you, and the Sanctuary makes it stronger', noHeirloomWhy: 'Leave it in the vault and keep it for another hero.',
     heirloom: 'Heirloom', noHeirloom: 'Leave it in the vault', startSkill: 'Starting skill',
     floor: 'Floor {0}', floorOf: 'Floor {0} of {1}', gold: 'Gold', level: 'Lv {0}', turn: 'Turn {0}',
-    fountain: 'Fountain', stairsOpen: 'Stairs open', stairsShut: 'Stairs still shut', mapFoes: '{0} enemies left', pointsShort: 'pts',
+    fountain: 'Fountain', stairsOpen: 'Stairs open', stairsShut: 'Stairs still shut', mapFoes: '{0} enemy left|{0} enemies left',
     inventory: 'Inventory', merchant: 'Merchant', invHint: 'Pick something to see what it does.', talents: 'Talents', pause: 'Paused', resume: 'Resume', abandon: 'Abandon run', settings: 'Settings',
     sound: 'Sound', language: 'Language', motion: 'Screen shake', on: 'On', off: 'Off',
     wait: 'Wait', descend: 'Descend', potion: 'Potion', map: 'Map',
     equipped: 'Equipped', bag: 'Bag', empty: 'Empty', equip: 'Equip', use: 'Use', drop: 'Drop', bagFull: 'Your bag is full.',
     weapon: 'Weapon', armor: 'Armor', trinket: 'Trinket',
     specPick: 'Choose your specialisation', specSecond: 'Level 10: pick a second one, or keep going deeper in the first', specLocked: 'Locked: another specialisation is already open', specOther: 'The other choice on this level is taken', specHave: 'Specialisations', specChange: 'One at a time: a second branch opens at level {0}.',
-    upBought: '{0} of {1} bought', shelfNone: 'nothing yet',
-    points: '{0} talent points', learn: 'Learn', learned: 'Learned', locked: 'Requires the talent above', needPoint: 'No points left',
+    upBought: '{0} of {1} bought', shelfCan: '{0} you can buy', shelfNone: 'nothing yet',
+    points: '{0} talent point|{0} talent points', learn: 'Learn', learned: 'Learned', locked: 'Requires the talent above', needPoint: 'No points left',
     talSpent: '{0} learned', talLevel: 'Level {0}', mana: 'Mana',
-    cooldown: '{0} turns', ready: 'Ready', range: 'Range {0}', cd: 'Cooldown {0}',
+    cooldown: '{0} turn|{0} turns', ready: 'Ready', range: 'Range {0}', cd: 'Cooldown {0}',
     youDied: 'You died', victory: 'Victory', slainBy: 'Slain by {0} on floor {1}.', winText: 'The Ashen Lich is no more. The surface sees the sun again.',
     embersEarned: '+{0} embers', newRelic: 'New relic unlocked: {0}', relicNext: 'Level {0}: {1}', toSanctuary: 'Go to the Sanctuary', again: 'New run', menu: 'Main menu',
-    endRelics: 'Relic up: {0}', endVault: 'In the vault: {0}', endRecord: 'New record', endBest: 'Best score yet', endBosses: '{0} bosses down', endOf: 'of {0}', endBestOf: 'best {0}', endEmbersTotal: '{0} embers in the Sanctuary', endCanBuy: 'You can buy something for {0} embers',
+    endRelics: 'Relic up: {0}', endVault: 'In the vault: {0}', endRecord: 'New record', endBest: 'Best score yet', endBosses: '{0} boss down|{0} bosses down', endOf: 'of {0}', endBestOf: 'best {0}', endEmbersTotal: '{0} embers in the Sanctuary', endCanBuy: 'You can buy something for {0} embers',
     statFloor: 'Floor', statKills: 'Kills', statGold: 'Gold', statTurns: 'Turns', statScore: 'Score', statLevel: 'Level',
     embers: 'Embers', buy: 'Buy', maxed: 'Max', relics: 'Relics', relicLocked: 'Defeat {0} to unlock it.',
     lifetime: 'Lifetime', runs: 'Runs', bestFloor: 'Best floor', wins: 'Wins', totalKills: 'Kills',
@@ -38,7 +38,7 @@ const STR = {
     lHit: '{0} hits {1} for {2}.', lCrit: '{0} crits {1} for {2}!', lMiss: '{0} misses {1}.', lKill: '{0} is destroyed.',
     lYouHit: 'You hit {0} for {1}.', lYouCrit: 'Critical! {0} takes {1}.', lYouMiss: 'You miss {0}.',
     lHitYou: '{0} hits you for {1}.', lCritYou: '{0} crits you for {1}!', lMissYou: '{0} misses you.',
-    lPoison: 'Poison: {0}.', lBurn: 'Burning: {0}.', lHeal: 'You recover {0} HP.', lGold: '+{0} gold.', lPick: 'You pick up {0}.',
+    lPoison: 'Poison: {0}.', lBurning: 'Burning: {0}.', lHeal: 'You recover {0} HP.', lGold: '+{0} gold.', lPick: 'You pick up {0}.',
     lChest: 'The chest opens.', lFountain: 'The fountain restores you.', lDescend: 'You descend to floor {0}.',
     lLevel: 'You reach level {0}.', lStun: '{0} is stunned.', lFrozen: '{0} is frozen.', lFear: '{0} flees in fear.',
     lWebbed: 'You are caught in a web.', lStunned: 'You are stunned.', lInvis: 'You vanish into the smoke.',
@@ -53,27 +53,27 @@ const STR = {
   },
   it: {
     tagline: 'Ventisette piani. Nove tiranni. Sei eroi. Una torcia.',
-    titleClasses: '{0} eroi', titleRuns: '{0} partite', titleBest: 'piano migliore {0} di {1}', titleUpgrades: '{0} su {1} potenziamenti', titleRelics: '{0} su {1} reliquie', titleWins: '{0} vinte', titleFirst: 'Prima volta? Scegli un eroe, muori un bel po\u2019, e spendi nel Santuario quello che tieni.',
+    titleClasses: '{0} eroi', titleRuns: '{0} partita|{0} partite', titleBest: 'piano migliore {0} di {1}', titleUpgrades: '{0} su {1} potenziamenti', titleRelics: '{0} su {1} reliquie', titleWins: '{0} vinta|{0} vinte', titleFirst: 'Prima volta? Scegli un eroe, muori un bel po\u2019, e spendi nel Santuario quello che tieni.',
     continue: 'Continua la partita', newRun: 'Nuova partita', sanctuary: 'Santuario', hall: 'Albo d\'onore', back: 'Indietro',
     signIn: 'Accedi con Google', signOut: 'Esci', signedAs: 'Sincronizzato come {0}', offline: 'I progressi restano in questo browser.',
     cloudOff: 'Il cloud non risponde. I progressi sono al sicuro in questo browser.',
-    chooseClass: 'Scegli l\'eroe', heroName: 'Nome dell\'eroe', begin: 'Scendi', relic: 'Reliquia', noRelic: 'Nessuna reliquia', relicNow: 'Adesso: livello {0} di {2}, {1} a livello', noRelicWhy: 'Scendi senza niente e trovati la tua strada.', heirloom: 'Cripta di famiglia', heirloomNow: 'Entra nella partita con te, e il Santuario lo rende più forte', noHeirloomWhy: 'Lascialo nella cripta per un altro eroe.',
+    chooseClass: 'Scegli l\'eroe', heroName: 'Nome dell\'eroe', begin: 'Scendi', relic: 'Reliquia', noRelic: 'Nessuna reliquia', relicNow: 'Adesso: livello {0} di {2}, {1} a livello', noRelicWhy: 'Scendi senza niente e trovati la tua strada.', heirloomNow: 'Entra nella partita con te, e il Santuario lo rende più forte', noHeirloomWhy: 'Lascialo nella cripta per un altro eroe.',
     heirloom: 'Cimelio', noHeirloom: 'Lascialo nella cripta', startSkill: 'Abilità iniziale',
     floor: 'Piano {0}', floorOf: 'Piano {0} di {1}', gold: 'Oro', level: 'Liv {0}', turn: 'Turno {0}',
-    fountain: 'Fonte', stairsOpen: 'Scale aperte', stairsShut: 'Scale ancora chiuse', mapFoes: '{0} nemici in giro', pointsShort: 'pti',
+    fountain: 'Fonte', stairsOpen: 'Scale aperte', stairsShut: 'Scale ancora chiuse', mapFoes: '{0} nemico in giro|{0} nemici in giro',
     inventory: 'Inventario', merchant: 'Mercante', invHint: 'Scegli un oggetto per vedere cosa fa.', talents: 'Talenti', pause: 'Pausa', resume: 'Riprendi', abandon: 'Abbandona la partita', settings: 'Impostazioni',
     sound: 'Suono', language: 'Lingua', motion: 'Scossoni', on: 'Sì', off: 'No',
     wait: 'Aspetta', descend: 'Scendi', potion: 'Pozione', map: 'Mappa',
     equipped: 'Equipaggiato', bag: 'Zaino', empty: 'Vuoto', equip: 'Equipaggia', use: 'Usa', drop: 'Butta', bagFull: 'Lo zaino è pieno.',
     weapon: 'Arma', armor: 'Armatura', trinket: 'Monile',
     specPick: 'Scegli la specializzazione', specSecond: 'Livello 10: puoi aprirne una seconda, o restare su una sola', specLocked: 'Chiusa: c\u2019\u00e8 gi\u00e0 un\u2019altra specializzazione aperta', specOther: 'L\u2019altra scelta di questo livello \u00e8 presa', specHave: 'Specializzazioni', specChange: 'Una alla volta: la seconda si apre al livello {0}.',
-    upBought: '{0} su {1} comprati', shelfNone: 'niente per ora',
-    points: '{0} punti talento', learn: 'Impara', learned: 'Imparato', locked: 'Serve il talento sopra', needPoint: 'Niente punti',
-    talSpent: '{0} imparati', talLevel: 'Livello {0}', mana: 'Mana',
-    cooldown: '{0} turni', ready: 'Pronta', range: 'Gittata {0}', cd: 'Ricarica {0}',
+    upBought: '{0} su {1} comprati', shelfCan: '{0} alla tua portata', shelfNone: 'niente per ora',
+    points: '{0} punto talento|{0} punti talento', learn: 'Impara', learned: 'Imparato', locked: 'Serve il talento sopra', needPoint: 'Niente punti',
+    talSpent: '{0} imparato|{0} imparati', talLevel: 'Livello {0}', mana: 'Mana',
+    cooldown: '{0} turno|{0} turni', ready: 'Pronta', range: 'Gittata {0}', cd: 'Ricarica {0}',
     youDied: 'Sei morto', victory: 'Vittoria', slainBy: 'Ucciso da{0} al piano {1}.', winText: 'Il Lich di Cenere non c\'è più. La superficie rivede il sole.',
     embersEarned: '+{0} braci', newRelic: 'Nuova reliquia: {0}', relicNext: 'Livello {0}: {1}', toSanctuary: 'Vai al Santuario', again: 'Nuova partita', menu: 'Menu principale',
-    endRelics: 'Reliquia salita: {0}', endVault: 'Nella cripta di famiglia: {0}', endRecord: 'Nuovo record', endBest: 'Punteggio migliore di sempre', endBosses: '{0} boss abbattuti', endOf: 'di {0}', endBestOf: 'migliore {0}', endEmbersTotal: '{0} braci nel Santuario', endCanBuy: 'Nel Santuario puoi comprare qualcosa a {0} braci',
+    endRelics: 'Reliquia salita: {0}', endVault: 'Nella cripta di famiglia: {0}', endRecord: 'Nuovo record', endBest: 'Punteggio migliore di sempre', endBosses: '{0} boss abbattuto|{0} boss abbattuti', endOf: 'di {0}', endBestOf: 'migliore {0}', endEmbersTotal: '{0} braci nel Santuario', endCanBuy: 'Nel Santuario puoi comprare qualcosa a {0} braci',
     statFloor: 'Piano', statKills: 'Uccisioni', statGold: 'Oro', statTurns: 'Turni', statScore: 'Punti', statLevel: 'Livello',
     embers: 'Braci', buy: 'Compra', maxed: 'Al massimo', relics: 'Reliquie', relicLocked: 'Sconfiggi {0} per sbloccarla.',
     lifetime: 'In totale', runs: 'Partite', bestFloor: 'Piano migliore', wins: 'Vittorie', totalKills: 'Uccisioni',
@@ -88,7 +88,7 @@ const STR = {
     lHit: '{0} colpisce {1}: {2}.', lCrit: '{0} colpisce in pieno {1}: {2}!', lMiss: '{0} manca {1}.', lKill: '{0} è distrutto.',
     lYouHit: 'Colpisci {0}: {1}.', lYouCrit: 'Critico! {0} subisce {1}.', lYouMiss: 'Manchi {0}.',
     lHitYou: '{0} ti colpisce: {1}.', lCritYou: '{0} ti colpisce in pieno: {1}!', lMissYou: '{0} ti manca.',
-    lPoison: 'Veleno: {0}.', lBurn: 'Fiamme: {0}.', lHeal: 'Recuperi {0} PV.', lGold: '+{0} oro.', lPick: 'Raccogli {0}.',
+    lPoison: 'Veleno: {0}.', lBurning: 'Fiamme: {0}.', lHeal: 'Recuperi {0} PV.', lGold: '+{0} oro.', lPick: 'Raccogli {0}.',
     lChest: 'Il forziere si apre.', lFountain: 'La fonte ti rimette in forze.', lDescend: 'Scendi al piano {0}.',
     lLevel: 'Sali al livello {0}.', lStun: '{0} è stordito.', lFrozen: '{0} è congelato.', lFear: '{0} scappa terrorizzato.',
     lWebbed: 'Sei preso in una ragnatela.', lStunned: 'Sei stordito.', lInvis: 'Sparisci nel fumo.',
@@ -107,6 +107,11 @@ const pick = () => { try { return localStorage.getItem('d101_lang'); } catch { r
 export let lang = pick() || ((typeof navigator !== 'undefined' && /^it/i.test(navigator.language)) ? 'it' : 'en');
 export function setLang(l) { lang = l; try { localStorage.setItem('d101_lang', l); } catch { /* not remembered */ } }
 
-export const t = (key, ...args) => (STR[lang][key] ?? STR.en[key] ?? key).replace(/\{(\d)\}/g, (_, i) => args[i]);
+// a string with a bar is "one|many": the first argument picks the form
+export const t = (key, ...args) => {
+  let s = STR[lang][key] ?? STR.en[key] ?? key;
+  if (s.includes('|')) { const [one, many] = s.split('|'); s = args[0] === 1 ? one : many; }
+  return s.replace(/\{(\d)\}/g, (_, i) => args[i]);
+};
 // data objects carry { en, it } names
 export const L = (o) => (o == null ? '' : typeof o === 'string' ? o : o[lang] ?? o.en);

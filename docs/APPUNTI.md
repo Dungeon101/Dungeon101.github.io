@@ -2,12 +2,12 @@
 
 Quello che serve per ripartire senza rileggere il codice. Il README dice cosa fa il gioco, qui c'è come è fatto dentro, dove sono le trappole e cosa resta da fare.
 
-## Dove siamo (23/11/2026)
+## Dove siamo (26/11/2026)
 
-- Branch **`feat/piu-piani-piu-classi`**: il lavoro del 23/11 (da `b20171e` in poi) e il 24/11 la schermata di fine partita, il titolo e la documentazione. Va in `main` quando Davide dice di sì.
-- Il gioco è passato da **9 piani / 3 classi** a **27 piani in 9 atti / 6 classi**, con talenti, mana, mercante, reliquie a livelli e Santuario a 50 potenziamenti.
-- Selftest ok, bot su 6 classi: piano medio 4,7–9,3, **zero vittorie**. È voluto: la difficoltà è tarata perché la prima partita non si vinca.
-- Niente è pubblicato: `main` è ancora la versione a 9 piani. Per pubblicare serve unire il branch (o farlo vedere in locale, sotto).
+- Tutto il lavoro del 23-24/11 è in `main` e pubblicato su `dungeon101.github.io`: **27 piani in 9 atti, 6 classi**, talenti, mana, mercante, reliquie a livelli, Santuario a 50 potenziamenti.
+- Il 26/11 una revisione completa delle regole ha trovato e sistemato una trentina di bug (sotto, "Fatto il 26/11"). Il selftest ora fallisce se un talento ha un flag che nessuna regola legge.
+- Bot (`node bot.mjs 6`): piano medio 5,5 (Maga) – 9,2 (Paladino), **zero vittorie**. È voluto: la prima partita non si vince.
+- La pagina del sito `/apps/dungeon101/` è allineata al gioco del 26/11.
 
 ## Come provarlo
 
@@ -88,8 +88,20 @@ Screenshot di prova: `$TMPDIR/shot2.mjs` (Playwright, talenti e inventario), `sh
 - **Barra abilità**: pulsanti 76×78, nome su due righe dentro il pulsante (niente più "…"), i nomi lunghi scendono a 8,5 px, la barra non esce dallo schermo.
 - `node bot.mjs` (5-6 partite per classe): 0 vittorie, medie 5.2-9.3. Maga e Cacciatore restano i più deboli: il prossimo lavoro è il bilanciamento, dopo aver insegnato al bot cure, scudi e lupo.
 
+## Fatto il 26/11
+
+- **Boss**: i tre boss nuovi hanno le loro mosse (prima solo l'attacco base). Draco Annegato: soffio di gelo in linea retta che si ferma al primo muro, si immerge e riemerge lontano quando lo raggiungi, chiama gli annegati. Verme di Cenere: pioggia di cenere intorno all'eroe, segugi e braci, a metà vita ti dà fuoco. Ultimo Custode: le sbarre della porta, una croce e poi una X sull'eroe (un passo di lato basta sempre), cavalieri vuoti e golem pallidi. Le loro illustrazioni sono nuove (prima riusavano quelle di altri boss), prompt in `docs/art/prompts/boss-*.txt`.
+- **"A metà vita picchia più forte"** era un `e.dmg = [12, 20]` fisso che dal quarto atto *abbassava* i danni del boss: ora è `enrage()`, +20% una volta sola sui danni del piano.
+- **Combattimento**: la soglia del critico saliva col livello (dal livello 3 nessun critico); ora scende di 1 ogni 5 livelli (`critChance`). Due talenti "Critico su N+" tengono il migliore invece di sommarsi. Primo sangue si applica. Pioggia di frecce non uccide due volte lo stesso nemico (`strike` esce se il bersaglio è già a terra).
+- **Lupo**: c'è dal primo turno per il cacciatore (in `Game.create`), scende le scale con l'eroe, cresce col livello, con Compagno, i talenti `petPower` e il Totem; tira contro l'armatura del nemico e non contro quella dell'eroe; nova, inferno e pergamena del fulmine non lo colpiscono più; camminandoci contro ci si scambia di posto (prima l'eroe lo attaccava).
+- **Oggetti**: Cimelio e Cripta di famiglia portano davvero l'oggetto nella partita (prima veniva distrutto); Tasche profonde allarga la borsa; una pila che non entra cade a terra invece di sparire; vendere una pila paga tutti i pezzi; il mercante vende un livello sopra il piano (prima 4-5 già dal piano 2).
+- **Stati**: Lacrima di ghiaccio non paralizza più per sempre; furia, grido di guerra, pelle di pietra, sanguinamento e tagliola sui nemici fanno effetto e scadono; Santuario e Consacrazione durano i turni promessi; morte e vittoria nello stesso turno non escono più insieme.
+- **Talenti e Santuario**: collegati i flag che non leggeva nessuno (erano 35) e quelli collegati al nodo sbagliato; "Cure +X%" e scudo massimo contano; Secondo respiro e Clessidra contano perché il mana non si riempie più da solo a ogni piano; Velocista e Concentrazione valgono un passo / un'abilità per livello; Artefice di fuga è per partita; Istinto mostra le scale da lontano; Vendetta e Acqua dolce (ora uno scudo) fanno qualcosa; Sigillo, Sigillo di sangue (oro) e Cuore freddo (1 PV a turno) come dice il testo.
+- **Interfaccia**: plurali (`t()` accetta "uno|molti"), "Ucciso da Stai bruciando" diventato "Ucciso dalle fiamme", barre di vita e mana leggibili, titolo senza parola orfana, eroi su 3×2, schermata di fine partita che sta in 800 px, nel Santuario quanti potenziamenti puoi già comprare per ripiano, barra XP giusta dal quarto atto, il lupo non ferma il tocca-e-cammina e non finisce nel riquadro del nemico. `learn()` controlla da solo le due scelte di un livello e il secondo ramo al 10 (prima lo faceva solo l'interfaccia: il bot prendeva tutto).
+
 ## Cosa resta
 
-1. **Bilanciamento**: la Maga (4,8 di piano medio) e il Cacciatore (4,7) sono indietro rispetto al Paladino (9,3). Il bot però non usa cure, scudi né il lupo, quindi le classi di supporto risultano più deboli di quanto siano in mano a una persona. Da guardare prima con il bot corretto, non con i numeri grezzi.
-2. **`Cimelio`** (potenziamento del Santuario) ha effetto solo se il Santuario passa l'oggetto alla partita: da verificare end to end.
-3. **Sito**: la pagina `/apps/dungeon101/` di `davide-mariotti.github.io` e gli screenshot vanno rifatti dopo il merge, perché parlano ancora di nove piani e tre classi.
+1. **Tre talenti senza effetto** (esclusi apposta nel selftest): Muro di ghiaccio (maga B6), Ombra (ladro A7), Trappole (ladro C7b/E6, cacciatore C1b): servono meccaniche nuove (caselle di ghiaccio temporanee, un alleato ombra, trappole nemiche nel dungeon).
+2. **I nemici non attaccano mai il lupo**: `enemyAct` mira solo l'eroe. Il lupo muore solo per gli attacchi ad area.
+3. **Abilità più care della riserva di mana**: Bestia e Branco 24 contro 16 (si lanciano dal livello 9), Meteora dal 11, Santuario del paladino dal 9. E cinque nodi insegnano l'abilità iniziale della classe (guerriero B1b, ladro C5, chierico B1, paladino C1, cacciatore B1): sono punti sprecati.
+4. **Bilanciamento**: Maga e Cacciatore restano i più deboli col bot; il bot però non usa cure, scudi né il lupo con giudizio.

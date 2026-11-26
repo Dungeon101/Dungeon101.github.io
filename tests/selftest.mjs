@@ -2,10 +2,11 @@
 // Checks the floor generator and plays whole runs with a simple bot: no exceptions, saves that survive a round trip,
 // and a rough balance report (how deep each class gets).
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { generate, distanceMap, walkable, canStep, DIRS, dist } from '../js/dungeon.js';
 import { Game, itemScore, STAT_KEYS, FLAGS } from '../js/game.js';
 import { CLASSES, TALENTS, BRANCHES, SKILLS, FLOORS, ACTS, ENEMIES, RELICS, isBossFloor, actIndex } from '../js/data.js';
+const RULES = readFileSync(new URL('../js/game.js', import.meta.url), 'utf8');
 
 // 1. floors: start and stairs reachable, every walkable tile connected
 for (let f = 1; f <= FLOORS; f++) for (let i = 0; i < 40; i++) {
@@ -140,7 +141,12 @@ for (const c of Object.keys(TALENTS)) {
     assert(n.desc.en.length > 3 && n.desc.it.length > 3, `${c} ${n.id}: no description`);
     for (const [k] of eff) {
       if (k.startsWith('skill:')) assert(SKILLS[k.slice(6)], `${c} ${n.id}: unknown skill ${k}`);
-      else if (k.startsWith('flag:')) assert(FLAGS.has(k.slice(5)), `${c} ${n.id}: flag ${k} is never read by the rules`);
+      else if (k.startsWith('flag:')) {
+        const f = k.slice(5);
+        assert(FLAGS.has(f), `${c} ${n.id}: flag ${k} is not a known flag`);
+        // a flag in the list is not enough: some rule has to ask for it. These three wait for mechanics of their own.
+        if (!['icewall', 'shadowsummon', 'traps'].includes(f)) assert(RULES.includes(`has('${f}')`), `${c} ${n.id}: flag ${k} is never read by the rules`);
+      }
       else assert(STAT_KEYS.has(k), `${c} ${n.id}: unknown stat ${k}`);
     }
   }

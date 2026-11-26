@@ -24,7 +24,7 @@ export function botTurn(g) {
     for (const row of g.shop().stock) if (!row.sold && row.it.slot !== 'use' && p.gold >= row.price && itemScore(row.it) > itemScore(p.equip[row.it.slot])) g.buy(row.i);
   }
   if (g.onStairs()) return g.act({ type: 'descend' });
-  const foes = g.visibleEnemies().sort((a, b) => dist(a, p) - dist(b, p));
+  const foes = g.visibleEnemies().filter((e) => !e.ally).sort((a, b) => dist(a, p) - dist(b, p));
   if (g.hazards.some((h) => h.x === p.x && h.y === p.y)) {
     for (const [dx, dy] of DIRS) if (!g.hazards.some((h) => h.x === p.x + dx && h.y === p.y + dy) && g.act({ type: 'move', dx, dy })) return true;
   }

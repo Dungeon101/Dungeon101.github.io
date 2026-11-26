@@ -78,7 +78,7 @@ export class Game {
   static create({ cls, name, relic = null, relicLvl = 1, heirloom = null, meta = {} }) {
     const up = (id) => meta.upgrades?.[id] || 0;
     const player = {
-      id: 1, kind: 'player', cls, name, x: 0, y: 0, hp: 1, mp: 0, xp: 0, lvl: 1, points: 1 + up('insight'), talents: {}, cds: {}, st: {},
+      id: 1, kind: 'player', cls, name, x: 0, y: 0, hp: 1, mp: 0, xp: 0, lvl: 1, points: 1 + up('insight') + (relic === 'seal' ? Math.ceil(clamp(relicLvl || 1, 1, 5) / 2) : 0), talents: {}, cds: {}, st: {},
       equip: { weapon: null, armor: null, trinket: null }, bag: [], gold: 0, flags: {}, venom: 0, pet: 0, spec: [],
     };
     const g = new Game({
@@ -94,7 +94,7 @@ export class Game {
         keepsake: up('keepsake') * 0.15, anvil: up('anvil'), greed: up('greed') * 0.08, haggle: up('haggle') * 0.08,
         xp: up('xp') * 0.12, lantern: up('lantern') * 2, map: up('map') * 0.25, stairs: up('stairs') * 4, sprint: up('sprint'),
         stealth: up('stealth') * 2, swift: up('swift'), focus: up('focus'), pierce: up('pierce'), bleed: up('bleed'),
-        executioner: up('executioner') * 0.08, firstblood: up('firstblood') * 2, companion: up('companion') * 0.2,
+        vendetta: up('vendetta') * 0.1, vendettaFloor: meta.history?.[0]?.floor || 0, executioner: up('executioner') * 0.08, firstblood: up('firstblood') * 2, companion: up('companion') * 0.2,
         sanctuary: up('sanctuary') * 0.04, fountain: up('fountain') * 0.2, ward: up('ward') * 5, resist: up('resist'),
         critpower: up('critpower') * 0.2,
       },
@@ -103,9 +103,9 @@ export class Game {
     player.equip.weapon = g.makeEquip('weapon', 1, 0, true);
     if (g.bonus.anvil) { player.equip.weapon.power += g.bonus.anvil; player.equip.weapon.tier = Math.min(5, player.equip.weapon.tier + g.bonus.anvil); }
     g.give(g.makeUse('heal', 1 + up('satchel')));
-    if (heirloom && g.bonus.heirloom > 0) {
+    if (heirloom) {
       const it = { ...heirloom, uid: g.uid++ };
-      if (g.bonus.heirloom > 0) { it.power = Math.round((it.power || 0) * (1 + g.bonus.heirloom)); it.ac = Math.round((it.ac || 0) * (1 + g.bonus.heirloom)); }
+      if (g.bonus.keepsake > 0) { it.power = Math.round((it.power || 0) * (1 + g.bonus.keepsake)); it.ac = Math.round((it.ac || 0) * (1 + g.bonus.keepsake)); }
       const c = CLASSES[cls];
       if (it.slot === 'weapon' && !c.weapons.includes(it.base)) it.base = c.weapons[0];
       if (it.slot === 'armor') it.base = c.armor;
@@ -114,6 +114,7 @@ export class Game {
     }
     g.newFloor(1);
     player.hp = g.ps().maxHp; player.mp = g.manaPool();
+    if (CLASSES[cls].skills.includes('beast')) { const spot = g.freeNear(player.x, player.y, 2)[0]; if (spot) g.summonWolf(spot); }
     return g;
   }
 
@@ -142,8 +143,8 @@ export class Game {
   // xp needed for the next level, at the pace of the act the hero is in
   xpToNext(lvl = this.player.lvl) { return xpNext(lvl, actIndex(this.floor || 1)); }
 
-  // crit chance: the sheet's number plus a little for every level, so a level 15 hero crits often
-  critChance() { return clamp(this.ps().crit + Math.floor(this.player.lvl / 3), 5, 60); }
+  // the d20 roll a hero crits on: the sheet's number, one lower every five levels (a level 15 warrior crits on 17+)
+  critChance() { return clamp(this.ps().crit - Math.floor(this.player.lvl / 5), 8, 20); }
 
   ps() {
     const p = this.player, c = CLASSES[p.cls], b = this.bonus, F = this.flags(), tb = this.talentBonus().stat, near = (this.enemies || []).filter((e) => dist(e, p) === 1);
@@ -154,14 +155,14 @@ export class Game {
     }
     return {
       maxHp: Math.round((c.hp + (p.lvl - 1) * c.hpLvl + b.hp + m.hp + (tb.hp || 0) + (this.relic === 'heart' ? 8 * this.rl() : 0)) * (this.relic === 'key' ? 1 + 0.1 * this.rl() : 1)),
-      ac: c.ac + b.ac + m.ac + (tb.ac || 0) + (this.relic === 'scale' ? 2 * this.rl() : 0) + (F.has('shieldwall') && near.length > 1 ? 2 : 0) + (F.has('aura') ? this.enemies.filter((e) => e.ally && dist(e, p) === 1).length : 0)
+      ac: c.ac + b.ac + m.ac + (tb.ac || 0) + (p.st.stoneskin > 0 ? 4 : 0) + (F.has('vigil') && !(this.enemies || []).some((e) => e.ally && dist(e, p) <= 1) ? 2 : 0) + (this.relic === 'scale' ? 2 * this.rl() : 0) + (F.has('shieldwall') && near.length > 1 ? 2 : 0) + (F.has('aura') ? this.enemies.filter((e) => e.ally && dist(e, p) === 1).length : 0)
         + (near.length >= 3 ? (b.bulwark || 0) : 0) + (p.hp < (c.hp + (p.lvl - 1) * c.hpLvl + b.hp) * 0.25 ? (b.mercy || 0) : 0),
       hit: c.hit + Math.floor(p.lvl / 2) + m.hit + (tb.hit || 0) + (b.hit || 0),
       power: b.power + m.power + Math.floor((p.lvl - 1) / 3) + (tb.power || 0) + (F.has('rampage') ? Math.min(8, this.stats.kills - (this.floorKills || 0)) : 0),
       crit: c.crit - Math.min(2, m.crit) - (F.has('lucky') ? 1 : 0) - (tb.crit ? 20 - tb.crit : 0) - (b.crit || 0),
       regenRelic: this.relic === 'heart' && this.rl() >= 4 ? 1 : 0,
-      dmg: c.dmg, regen: m.regen + (tb.regen || 0) + (this.relic === 'heart' && this.rl() >= 4 ? 1 : 0) + (b.regen || 0), steal: m.steal + (tb.steal || 0) + (b.leech || 0),
-      gold: 1 + b.gold + m.gold / 100 + (tb.gold || 0) / 100 + (F.has('lucky') ? 0.25 : 0) + (this.relic === 'coin' ? 0.2 * this.rl() : 0),
+      dmg: c.dmg, regen: m.regen + (tb.regen || 0) + (b.regen || 0), steal: m.steal + (tb.steal || 0) + (b.leech || 0),
+      gold: 1 + b.gold + m.gold / 100 + (tb.gold || 0) / 100 + (F.has('lucky') ? 0.25 : 0) + (this.relic === 'coin' ? 0.2 * this.rl() : 0) + (this.relic === 'sigil' ? 0.12 * this.rl() : 0),
       light: 7 + b.light + m.light + (tb.sight || 0) + (this.relic === 'lantern' ? this.rl() : 0),
       melee: 1 + (tb.melee || 0) / 100, spell: 1 + (tb.spell || 0) / 100 + (b.spell || 0), heal: 1 + (tb.heal || 0) / 100,
       // arrows and spells cast at range, and the traps that wait on the floor
@@ -195,6 +196,8 @@ export class Game {
       const n = nodes.find((x) => x.id === id);
       for (const [k, v] of Object.entries(n?.eff || {})) {
         if (k.startsWith('flag:')) out.flag.add(k.slice(5));
+        // "crit on N+" is a threshold, not a bonus: two of them keep the better one
+        else if (k === 'crit') out.stat.crit = Math.min(out.stat.crit ?? 20, v);
         else if (!k.startsWith('skill:')) out.stat[k] = (out.stat[k] || 0) + v;
       }
     }
@@ -231,7 +234,7 @@ export class Game {
   // the mana a skill actually takes: canCast and useSkill both read it, so a free cast stays free
   spend(id) {
     const p = this.player, cost = this.skillCost(id);
-    if (p.flags.freeCast) p.flags.freeCast = false;
+    if (p.flags.freeCast > 0) p.flags.freeCast--;
     p.mp -= cost;
   }
 
@@ -247,7 +250,8 @@ export class Game {
     if (this.player.st.invis > 0) return false;
     const soft = this.bonus?.stealth || 0;
     if (!this.vis[e.y * this.map.w + e.x]) return false;
-    return soft ? dist(e, this.player) <= Math.max(1, this.ps().light - soft) : true;
+    const hide = soft + (this.has('camouflage') ? 1 : 0);
+    return hide ? dist(e, this.player) <= Math.max(1, this.ps().light - hide) : true;
   }
   visibleEnemies() { return this.enemies.filter((e) => this.vis[e.y * this.map.w + e.x]); }
   // a dying hero's killer is sometimes a string ('poison', 'burn'), not an enemy
@@ -258,6 +262,7 @@ export class Game {
     const p = this.player, m = this.map;
     fov(m, p.x, p.y, this.ps().light, this.vis);
     for (let i = 0; i < this.vis.length; i++) if (this.vis[i]) m.seen[i] = 1;
+    if (this.bonus?.stairs && m.stairs && dist(m.stairs, p) <= this.ps().light + this.bonus.stairs) m.seen[m.stairs.y * m.w + m.stairs.x] = 1;
     // the Eternal Lantern lights up every enemy at level 3
     if (this.relic === 'lantern' && this.rl() >= 3) for (const e of this.enemies) if (!e.ally) this.vis[e.y * m.w + e.x] = 1;
     // Lantern Oil: enemies show through the walls, a little further with every level
@@ -319,11 +324,14 @@ export class Game {
       if (same) {
         const room = 9 - (same.n || 1), moved = Math.min(room, it.n || 1);
         same.n = (same.n || 1) + moved;
-        if (moved < (it.n || 1)) { const rest = { ...it, uid: this.uid++, n: (it.n || 1) - moved }; return this.give(rest) || same; }
+        if (moved < (it.n || 1)) {
+          const rest = { ...it, uid: this.uid++, n: (it.n || 1) - moved };
+          if (!this.give(rest) && this.map) this.items.push({ x: p.x, y: p.y, it: rest });
+        }
         return same;
       }
     }
-    if (p.bag.length >= BAG) return null;
+    if (p.bag.length >= this.bagSize()) return null;
     p.bag.push(it);
     return it;
   }
@@ -348,7 +356,7 @@ export class Game {
       return true;
     }
     const same = it.slot === 'use' && p.bag.find((x) => x.slot === 'use' && x.kind === it.kind && (x.n || 1) < 9);
-    if (!same && p.bag.length >= BAG) { this.items.push({ x, y, it }); this.say(t('lFull', itemName(it))); return false; }
+    if (!same && p.bag.length >= this.bagSize()) { this.items.push({ x, y, it }); this.say(t('lFull', itemName(it))); return false; }
     const stacked = this.give(it);
     this.say(t('lPick', itemName(it)), 'loot');
     // the pickup animation carries the stack, so two potions read as "×2" instead of one more of something
@@ -362,17 +370,18 @@ export class Game {
     const m = generate(n);
     this.map = m;
     this.vis = new Uint8Array(m.w * m.h);
+    const wolves = (this.enemies || []).filter((e) => e.ally && e.hp > 0);
     this.enemies = []; this.items = []; this.chests = []; this.hazards = []; this.fountain = null; this.merchant = null;
     const p = this.player;
     p.x = m.start.x; p.y = m.start.y;
-    p.flags.unbreakable = false; p.flags.secondWind = false; p.flags.guardian = false; p.flags.mirror = false;
-    p.flags.sprintUsed = false; p.flags.evade = 0;
-    p.mp = this.manaPool();
+    for (const w of wolves) { const c = this.freeNear(p.x, p.y, 2)[0]; if (c) { w.x = c.x; w.y = c.y; this.enemies.push(w); } }
+    p.flags.unbreakable = false; p.flags.secondWind = false; p.flags.guardian = false; p.flags.mirror = false; p.flags.vanguard = false;
+    p.flags.sprintUsed = 0;
     // the sanctuary: mana back at the start of a floor, HP healed, a shield, the first skill free
     const bo = this.bonus;
     p.mp = Math.min(this.manaPool(), p.mp + (bo.manafloor || 0));
     p.st.shield = (p.st.shield || 0) + (bo.ward || 0);
-    p.flags.freeCast = !!bo.focus;
+    p.flags.freeCast = bo.focus || 0;
     if (bo.sanctuary) this.heal(Math.round(this.ps().maxHp * bo.sanctuary), true);
     if (bo.forage) for (let i = 0; i < bo.forage; i++) this.give(this.makeUse(chance(0.7) ? 'heal' : 'mana'));
     if (bo.map) for (let i = 0; i < m.seen.length; i++) if (chance(bo.map)) m.seen[i] = 1;
@@ -385,7 +394,7 @@ export class Game {
     if (this.relic === 'totem' && !this.pets().length) { const spot = this.freeNear(p.x, p.y, 2)[0]; if (spot) this.summonWolf(spot); }
     if (this.has('barrier')) p.st.shield = (p.st.shield || 0) + Math.round(10 * this.ps().shieldMax);
     if (this.has('consecrated')) this.heal(10, true);
-    if (p.pet) this.tunePet();
+    if (this.pets().length) this.tunePet();
     if (boss) this.spawn(act.boss, m.stairs.x, m.stairs.y, false, within);
     let count = Math.round((7 + n + rint(0, 2)) * (boss ? 0.7 : 1));
     const cells = this.freeCells(8).sort(() => Math.random() - 0.5);
@@ -429,7 +438,7 @@ export class Game {
       stock.push({ it, price: Math.round(this.priceOf(it) * (1 - this.discount())), sold: false });
     }
     for (let i = 0; i < 3; i++) {
-      const it = this.makeEquip(pick(['weapon', 'armor', 'trinket']), n + 1, 1);
+      const it = this.makeEquip(pick(['weapon', 'armor', 'trinket']), 1, 1); // one tier above the floor, like a boss drop
       stock.push({ it, price: Math.round(this.priceOf(it) * (1 - this.discount())), sold: false });
     }
     return stock;
@@ -440,7 +449,7 @@ export class Game {
     if (it.slot === 'use') return it.kind === 'greatHeal' ? 22 : 10 + this.floor * 2;
     return Math.round((itemScore(it) + 3) * (2.2 + this.floor * 0.5));
   }
-  sellPrice(it) { return Math.max(3, Math.round(this.priceOf(it) * 0.4 * (1 + (this.bonus?.greed || 0)))); }
+  sellPrice(it) { return Math.max(3, Math.round(this.priceOf(it) * 0.4 * (1 + (this.bonus?.greed || 0)))) * (it.slot === 'use' ? it.n || 1 : 1); }
   // the Miser's Coin makes everything in a shop cheaper
   discount() { return (this.relic === 'coin' ? 0.05 * this.rl() : 0) + (this.bonus?.haggle || 0); }
   // the merchant's stock, with what he pays for everything in the bag
@@ -457,8 +466,8 @@ export class Game {
     if (p.gold < x.price) { this.say(t('lNoGold'), 'bad'); return false; }
     if (x.it.slot === 'use') {
       const same = p.bag.find((b) => b.slot === 'use' && b.kind === x.it.kind && (b.n || 1) + (x.it.n || 1) <= 9);
-      if (!same && p.bag.length >= BAG) { this.say(t('lFull', itemName(x.it))); return false; }
-    } else if (p.bag.length >= BAG) { this.say(t('lFull', itemName(x.it))); return false; }
+      if (!same && p.bag.length >= this.bagSize()) { this.say(t('lFull', itemName(x.it))); return false; }
+    } else if (p.bag.length >= this.bagSize()) { this.say(t('lFull', itemName(x.it))); return false; }
     p.gold -= x.price; x.sold = true;
     this.give(x.it);
     this.say(t('lBought', itemName(x.it)), 'gold');
@@ -519,6 +528,7 @@ export class Game {
     if (this.over) return false;
     const p = this.player;
     this.usedSkill = null;
+    if (this.has('unstoppable')) { p.st.stun = 0; p.st.web = 0; }
     if (p.st.stun > 0) { this.say(t('lStunned'), 'bad'); this.endTurn(); return true; }
     let done = false;
     if (a.type === 'move') done = this.tryMove(a.dx, a.dy);
@@ -531,8 +541,8 @@ export class Game {
     }
     if (done && !this.over) {
       // Sprinter: the first step on a floor is free, once per level
-      if (a.type === 'move' && this.bonus?.sprint && !p.flags.sprintUsed) {
-        p.flags.sprintUsed = true;
+      if (a.type === 'move' && (p.flags.sprintUsed || 0) < (this.bonus?.sprint || 0)) {
+        p.flags.sprintUsed = (p.flags.sprintUsed || 0) + 1;
         this.recompute();
         return true;
       }
@@ -545,7 +555,9 @@ export class Game {
     const p = this.player, m = this.map, nx = p.x + dx, ny = p.y + dy;
     const e = this.enemyAt(nx, ny);
     const diagOk = !dx || !dy || (tile(m, p.x + dx, p.y) !== WALL && tile(m, p.x, p.y + dy) !== WALL);
-    if (e) { if (!diagOk) return false; this.strike(p, e); return true; }
+    // the wolf steps aside: walking into it swaps places instead of biting your own dog
+    if (e && e.ally && canStep(m, p.x, p.y, dx, dy) && !(p.st.web > 0)) { e.x = p.x; e.y = p.y; }
+    else if (e) { if (e.ally || !diagOk) return false; this.strike(p, e); return true; }
     const chest = this.chestAt(nx, ny);
     if (chest) {
       chest.open = true;
@@ -573,8 +585,9 @@ export class Game {
     const f = this.fountain;
     if (f && !f.used && f.x === nx && f.y === ny) {
       f.used = true;
-      const st = this.ps(), n = Math.round((st.maxHp - p.hp) * (1 + (this.bonus.fountain || 0)));
+      const st = this.ps(), n = st.maxHp - p.hp;
       p.hp = st.maxHp; p.st.poison = 0;
+      if (this.bonus.fountain) p.st.shield = Math.max(p.st.shield || 0, Math.round(st.maxHp * this.bonus.fountain));
       this.say(t('lFountain'), 'good'); this.emit({ t: 'fx', k: 'fountain', x: nx, y: ny }); if (n > 0) this.emit({ t: 'heal', id: p.id, n, x: nx, y: ny });
     }
     if (this.onStairs()) this.say(t('stairsHint'), 'sys');
@@ -583,61 +596,75 @@ export class Game {
 
   // one attack roll. o: { flat, mult, sure, adv, kind ('melee' | shot kind | 'spell'), noCrit }
   strike(a, d, o = {}) {
-    const p = this.player, isP = a === p, st = this.ps(), F = this.flags();
+    if (d.hp <= 0 || a.hp <= 0) return false; // a second arrow at a body already down
+    const p = this.player, isP = a === p, st = this.ps(), F = this.flags(), fresh = !d.touched, toP = d === p;
     let roll = rint(1, 20);
     if (o.adv) roll = Math.max(roll, rint(1, 20));
     let crit = !o.noCrit && roll >= (isP ? this.critChance() : 20);
     if (isP && p.st.invis > 0) { crit = true; p.st.invis = 0; }
     if (isP && (F.has('ambush') || F.has('ghost')) && !d.touched) crit = true;
     // Piercing Blows: the hero's hits go through a few points of the enemy's armour
-    const hitBonus = (isP ? st.hit : a.hit) + (o.hitBonus || 0), ac = (isP ? d.ac - (st.pierce || 0) : st.ac);
+    const hitBonus = (isP ? st.hit : a.hit) + (o.hitBonus || 0), ac = isP ? d.ac - (st.pierce || 0) : toP ? st.ac : d.ac;
     const hit = o.sure || crit || (roll !== 1 && roll + hitBonus >= ac);
     if (o.kind && o.kind !== 'melee' && o.kind !== 'spell') this.emit({ t: 'shot', a: a.id, d: d.id, k: o.kind, x0: a.x, y0: a.y, x1: d.x, y1: d.y });
     else if (o.kind !== 'spell') this.emit({ t: 'atk', a: a.id, d: d.id });
     if (isP) d.touched = true;
     if (!hit) {
       this.emit({ t: 'miss', id: d.id, x: d.x, y: d.y });
-      this.say(isP ? t('lYouMiss', this.ename(d)) : t('lMissYou', this.ename(a)));
+      this.say(isP ? t('lYouMiss', this.ename(d)) : toP ? t('lMissYou', this.ename(a)) : t('lMiss', this.ename(a), this.ename(d)));
       return false;
     }
     // a weapon's power is added to the hero's damage, like a spell's own power is
     let n = o.base != null ? o.base : rint(...(isP ? st.dmg.map((x) => x + st.power) : a.dmg));
     n += o.flat || 0;
-    if (isP && o.kind === 'spell') n *= st.spell;
+    if (isP && o.kind === 'spell') n *= st.spell * (F.has('mastery') ? 1.3 : 1);
     if (isP && o.kind !== 'spell') n *= st.melee * (o.ranged ? st.ranged : 1);
     if (isP && F.has('wrath') && o.kind === 'spell') n *= 1.2;
     if (crit) n *= (isP && F.has('assassin') ? 3 : 2) * (isP && st.critpower ? 1 + st.critpower : 1);
     n *= o.mult || 1;
-    if (isP && st.firstblood && !d.touched) n += st.firstblood;
+    if (isP && st.firstblood && fresh) n += st.firstblood;
+    if (isP && F.has('vanguard') && !p.flags.vanguard) { p.flags.vanguard = true; n *= 1.25; } // Vanguard: the first blow of a floor
     if (isP) n *= this.playerMult(d);
     n = Math.max(1, Math.round(n));
-    if (!isP && (p.st.dodge || 0) + (st.dodge || 0) > 0 && chance(((p.st.dodge || 0) + (st.dodge || 0)) / 100)) { this.say(t('lDodge')); this.emit({ t: 'miss', id: p.id, x: p.x, y: p.y }); return false; }
-    if (!isP && F.has('ward') && chance(0.25)) {
+    if (toP && (p.st.dodge || 0) + (st.dodge || 0) > 0 && chance(((p.st.dodge || 0) + (st.dodge || 0)) / 100)) { this.say(t('lDodge')); this.emit({ t: 'miss', id: p.id, x: p.x, y: p.y }); return false; }
+    if (toP && ((F.has('mirror') && !p.flags.mirror) || (F.has('guardian') && !p.flags.guardian))) {
+      if (F.has('mirror') && !p.flags.mirror) p.flags.mirror = true; else p.flags.guardian = true;
       this.say(t('lWard'), 'good'); this.emit({ t: 'fx', k: 'ward', x: p.x, y: p.y }); return false;
     }
-    this.say(isP ? t(crit ? 'lYouCrit' : 'lYouHit', this.ename(d), n) : t(crit ? 'lCritYou' : 'lHitYou', this.ename(a), n), isP ? (crit ? 'crit' : '') : 'bad');
+    if (toP && F.has('ward') && chance(0.25)) {
+      this.say(t('lWard'), 'good'); this.emit({ t: 'fx', k: 'ward', x: p.x, y: p.y }); return false;
+    }
+    this.say(isP ? t(crit ? 'lYouCrit' : 'lYouHit', this.ename(d), n) : toP ? t(crit ? 'lCritYou' : 'lHitYou', this.ename(a), n) : t(crit ? 'lCrit' : 'lHit', this.ename(a), this.ename(d), n), isP ? (crit ? 'crit' : '') : toP ? 'bad' : '');
     this.damage(d, n, crit, a);
+    if (isP && F.has('bloodtrail')) this.heal(Math.floor(n / 10), true);
+    if (isP && o.kind === 'spell' && F.has('siphon')) this.heal(Math.round(n * 0.15), true);
+    if (toP && F.has('retribution') && a.hp > 0) this.damage(a, 3, false, p);
     if (isP && d.hp > 0) {
-      if (p.venom > 0 && o.kind !== 'spell') { p.venom--; this.poison(d, F.has('toxicity') ? 4 : 3, F.has('toxicity') ? 6 : 4); }
+      if (F.has('wintergrasp') && !d.st.slowed) d.st.slow = 1;
+      if (F.has('abszero') && !d.boss && d.hp < d.maxHp * 0.3 && !d.st.frozen) d.st.frozen = 2;
+      if (F.has('bleeding') && o.kind !== 'spell') { d.st.bleed = Math.max(d.st.bleed || 0, 3); d.st.bleedDmg = Math.max(d.st.bleedDmg || 0, 2 + Math.floor(this.floor / 3)); }
+      if (p.venom > 0 && o.kind !== 'spell') {
+        p.venom--; this.poison(d, F.has('toxicity') ? 4 : 3, F.has('toxicity') ? 6 : 4);
+        // Plaguebearer: the poison jumps to whoever stands next to the target
+        if (F.has('plaguebearer')) for (const e of this.enemies) if (!e.ally && e !== d && e.hp > 0 && dist(e, d) === 1) this.poison(e, 2, 3);
+      }
       else if (this.relic === 'gland' && o.kind !== 'spell') this.poison(d, 1 + this.rl(), 3);
-      else if (this.relic === 'ember' && o.kind !== 'spell' && d.hp > 0) { d.st.burn = Math.max(d.st.burn || 0, 3); d.st.burnDmg = Math.max(d.st.burnDmg || 0, this.rl()); }
+      else if (this.relic === 'ember' && o.kind !== 'spell' && d.hp > 0) { d.st.burn = Math.max(d.st.burn || 0, F.has('pyre') ? 5 : 3); d.st.burnDmg = Math.max(d.st.burnDmg || 0, this.rl()); }
       // Serrated Edge: a cut that keeps bleeding
       if (st.bleed && o.kind !== 'spell' && d.hp > 0) { d.st.bleed = Math.max(d.st.bleed || 0, 3); d.st.bleedDmg = Math.max(d.st.bleedDmg || 0, st.bleed); }
       // Frozen Tear: your hits slow, and from level 3 they freeze
       if (this.relic === 'tear' && o.kind !== 'spell' && d.hp > 0) {
         if (this.rl() >= 3) d.st.frozen = Math.max(d.st.frozen || 0, d.boss ? 1 : 2);
-        else d.st.slow = 1;
+        else if (!d.st.slowed) d.st.slow = 1;
       }
     }
     if (isP && st.steal && p.hp > 0) this.heal(st.steal, true);
-    if (isP && crit && F.has('packbond') && p.pet) this.heal(3, true);
-    if (!isP && a.ally && crit && this.has('packbond')) this.heal(3, true);
-    if (!isP && p.hp > 0) {
+    if (toP && p.hp > 0) {
       const on = ENEMIES[a.type].onHit;
       if (on === 'stun' && chance(0.15)) { p.st.stun = 1; this.say(t('lStunned'), 'bad'); }
       if (on === 'poison') { p.st.poison = Math.max(p.st.poison || 0, Math.max(1, 3 - (st.resist || 0))); p.st.poisonDmg = 2 + Math.floor(this.floor / 3); }
       if (on === 'burn') { p.st.burn = Math.max(p.st.burn || 0, Math.max(1, 3 - (st.resist || 0))); p.st.burnDmg = 2 + Math.floor(this.floor / 2); }
-      if (on === 'drain') { a.hp = Math.min(a.maxHp, a.hp + Math.ceil(n / 2)); }
+      if (on === 'drain' && !(a.st.poison > 0 && this.has('creepingrot'))) { a.hp = Math.min(a.maxHp, a.hp + Math.ceil(n / 2)); }
     }
     return true;
   }
@@ -646,12 +673,17 @@ export class Game {
     const p = this.player, st = this.ps(), F = this.flags();
     let k = 1;
     if (this.relic === 'crown') k *= 1 + 0.08 * this.rl();
+    if (p.st.rage > 0) k *= 1.4;
+    if (p.st.cry > 0) k *= 1.25;
+    if (this.bonus.vendetta && this.floor === this.bonus.vendettaFloor) k *= 1 + this.bonus.vendetta;
+    if (F.has('judgement') && d.hp < d.maxHp * 0.25) k *= 1.5;
     if (F.has('rage') && p.hp < st.maxHp / 2) k *= 1.5;
     if (F.has('executioner') && d.hp < d.maxHp * 0.3) k *= 1.6;
     if (st.executioner && d.hp < d.maxHp * 0.3) k *= 1 + st.executioner;
     if (F.has('shatter') && (d.st.frozen > 0 || d.st.stun > 0)) k *= 1.6;
     if (F.has('virulence') && d.st.poison > 0) k *= 1.3;
     if (F.has('kindled') && d.st.burn > 0) k *= 1.5;
+    if (F.has('searing') && d.st.burn > 0) k *= 1.25;
     if (this.relic === 'sigil') k *= 1 + 0.12 * this.rl();
     return k;
   }
@@ -659,7 +691,9 @@ export class Game {
   poison(e, dmg, turns) { e.st.poison = Math.max(e.st.poison || 0, turns); e.st.poisonDmg = Math.max(e.st.poisonDmg || 0, dmg); }
 
   heal(n, quiet = false) {
-    const p = this.player, max = this.ps().maxHp;
+    const p = this.player, st = this.ps(), max = st.maxHp;
+    n = Math.round(n * st.heal);
+    if (this.has('martyr')) for (const w of this.pets()) w.hp = Math.min(w.maxHp, w.hp + n);
     const got = Math.min(n, max - p.hp);
     if (got <= 0) return 0;
     p.hp += got;
@@ -685,6 +719,10 @@ export class Game {
         this.damage(from, sp.thorns, false, 'thorns');
       }
       if (F.has('lastStand') && p.hp < this.ps().maxHp / 3) n = Math.max(1, Math.round(n * 0.8));
+      if (F.has('sacredvow') && p.hp < sp.maxHp / 2) n = Math.max(1, Math.round(n * 0.85));
+      // Blood Bond: the wolf takes half of every blow
+      const wolf = F.has('bloodbond') && from !== 'poison' && from !== 'burn' ? this.pets().find((w) => w.hp > 1) : null;
+      if (wolf) { const half = Math.min(wolf.hp - 1, Math.floor(n / 2)); wolf.hp -= half; n -= half; }
       if (p.st.sanctuary > 0) n = Math.max(1, Math.round(n * 0.65));
       const sh = p.st.shield || 0;
       if (sh > 0) {
@@ -705,6 +743,9 @@ export class Game {
       if (p.hp <= 0 && sp.evade && (p.flags.evade || 0) < sp.evade) {
         p.flags.evade = (p.flags.evade || 0) + 1; p.hp = 1; this.say(t('lEvade'), 'good'); this.emit({ t: 'fx', k: 'ward', x: p.x, y: p.y });
       }
+      if (p.hp <= 0 && F.has('miracle') && !p.flags.miracle) {
+        p.flags.miracle = true; p.hp = Math.round(st.maxHp / 2); this.say(t('lRelic'), 'good'); this.emit({ t: 'fx', k: 'level', x: p.x, y: p.y });
+      }
       if (p.hp <= 0 && this.relic === 'phylactery' && (p.flags.revives || 0) < 1 + Math.floor(this.rl() / 2)) {
         p.flags.revives = (p.flags.revives || 0) + 1; p.hp = Math.round(st.maxHp / 2); this.say(t('lRelic'), 'good'); this.emit({ t: 'fx', k: 'level', x: p.x, y: p.y });
       }
@@ -713,7 +754,7 @@ export class Game {
       }
       if (p.hp <= 0) {
         p.hp = 0; this.over = 'dead';
-        this.killer = from === 'poison' ? t('lPoison', '').replace(/[:.\s]+$/, '') : from === 'burn' ? t('lBurn', '').replace(/[:.\s]+$/, '') : from ? this.ename(from) : '?';
+        this.killer = from === 'poison' ? t('lPoison', '').replace(/[:.\s]+$/, '') : from === 'burn' ? t('lBurning', '').replace(/[:.\s]+$/, '') : from ? this.ename(from) : '?';
         this.emit({ t: 'die', id: p.id, x: p.x, y: p.y, player: true });
         this.emit({ t: 'over', win: false });
       }
@@ -731,13 +772,15 @@ export class Game {
       return;
     }
     this.enemies = this.enemies.filter((x) => x !== e);
-    // a wolf that dies next to the hero leaves a body in the way: it has to leave the field too
-    if (this.pets().includes(e)) { this.enemies = this.enemies.filter((x) => x !== e); this.say(t('lPetDown'), 'bad'); this.pet = this.pets()[0] || null; return; }
+    if (this.over) return; // the hero fell this same turn: a kill after that wins nothing
     this.stats.kills++;
     this.say(t('lKill', this.ename(e)), 'kill');
     this.emit({ t: 'die', id: e.id, x: e.x, y: e.y, type: e.type, boss: e.boss, elite: e.elite });
     if (this.has('bloodlust')) this.heal(3, true);
-    if (this.has('martyr')) this.heal(4, true);
+    if (this.has('manasurge')) p.mp = Math.min(this.manaPool(), p.mp + 2);
+    // Combustion: a burning enemy that falls sets its neighbours alight
+    if (this.has('combustion') && e.st.burn > 0) for (const x of this.enemies) if (!x.ally && x.hp > 0 && dist(x, e) === 1) { x.st.burn = Math.max(x.st.burn || 0, 3); x.st.burnDmg = Math.max(x.st.burnDmg || 0, e.st.burnDmg || 2); }
+    if (this.has('packbond')) for (const w of this.pets()) w.hp = Math.min(w.maxHp, w.hp + Math.round(w.maxHp * 0.25));
     this.gainXp(e.xp);
     if (d.split) for (const c of this.freeNear(e.x, e.y).slice(0, 2)) { const s = this.spawn('slimelet', c.x, c.y); s.awake = true; }
     const drop = (it) => { const c = this.blocked(e.x, e.y) || this.items.some((i) => i.x === e.x && i.y === e.y) ? this.freeNear(e.x, e.y)[0] : e; if (c) this.items.push({ x: c.x, y: c.y, it }); };
@@ -762,7 +805,7 @@ export class Game {
     p.xp += Math.round(n * (1 + (this.bonus.xp || 0)));
     while (p.xp >= this.xpToNext(p.lvl)) {
       p.xp -= this.xpToNext(p.lvl); p.lvl++; p.points++;
-      if (p.pet) this.tunePet();
+      if (this.pets().length) this.tunePet();
       const st = this.ps();
       p.hp = Math.min(st.maxHp, p.hp + Math.round(st.maxHp * 0.3) + CLASSES[p.cls].hpLvl);
       this.say(t('lLevel', p.lvl), 'good');
@@ -787,13 +830,11 @@ export class Game {
     const bi = letter.charCodeAt(0) - 65, branch = TALENTS[p.cls][bi] || [];
     const above = lvl === 1 || branch.some((n) => n.id !== id && Number(n.id.slice(1).replace(/[ab]$/, '')) === lvl - 1 && p.talents[n.id]);
     const opened = this.branchOpen(bi);
-    if (p.points <= 0 || p.talents[id] || !above) return false;
+    if (p.points <= 0 || p.talents[id] || !above || p.talents[id.endsWith('b') ? id.slice(0, -1) : id + 'b']) return false;
     if (!opened) {
-      if (lvl !== 1 || this.specFull()) return false;
+      if (lvl !== 1 || this.specFull() || (p.spec.length >= 1 && p.lvl < SPEC_LVL)) return false;
       p.spec.push(bi);
     }
-    // two choices on the same level: taking one closes the other for good
-    if (branch.some((n) => n.id === id + 'b' && p.talents[n.id])) return false;
     const before = this.ps().maxHp;
     p.points--; p.talents[id] = 1;
     p.hp += Math.max(0, this.ps().maxHp - before);
@@ -850,7 +891,7 @@ export class Game {
       case 'bash':
         this.emit({ t: 'fx', k: 'bash', x: target.x, y: target.y });
         if (this.strike(p, target, { sure: true, flat: 2 }) && target.hp > 0) {
-          target.st.stun = target.boss ? 1 : F.has('toxicity') ? 3 : 2; this.say(t('lStun', this.ename(target)));
+          target.st.stun = target.boss ? 1 : F.has('concussion') ? 3 : 2; this.say(t('lStun', this.ename(target)));
         }
         break;
       case 'charge': {
@@ -867,20 +908,20 @@ export class Game {
         const hit = (e, k) => {
           if (e.hp <= 0) return;
           this.strike(p, e, { sure: true, kind: 'spell', base: Math.round(n * k) });
-          if (F.has('kindling') && e.hp > 0) { e.st.burn = 3; e.st.burnDmg = 2 + Math.floor(this.floor / 3); }
+          if (F.has('kindling') && e.hp > 0) { e.st.burn = F.has('pyre') ? 5 : 3; e.st.burnDmg = 2 + Math.floor(this.floor / 3); }
         };
-        const around = F.has('inferno') ? this.enemies.filter((e) => e !== target && dist(e, target) === 1) : [];
+        const around = F.has('inferno') ? this.enemies.filter((e) => !e.ally && e !== target && dist(e, target) === 1) : [];
         hit(target, 1);
         if (F.has('inferno')) { this.emit({ t: 'fx', k: 'explode', x: target.x, y: target.y }); for (const e of around) hit(e, 0.5); }
         break;
       }
       case 'nova': {
-        const list = this.enemies.filter((e) => dist(e, p) <= 2);
+        const list = this.enemies.filter((e) => !e.ally && dist(e, p) <= (F.has('deepfreeze') ? 3 : 2));
         if (!list.length) { this.say(t('lNoTarget')); return false; }
         this.emit({ t: 'fx', k: 'nova', x: p.x, y: p.y });
         for (const e of list) {
           this.strike(p, e, { sure: true, kind: 'spell', base: spell(3, 6) + Math.floor(p.lvl / 2) });
-          if (e.hp > 0) { e.st.frozen = e.boss ? 1 : 2; this.say(t('lFrozen', this.ename(e))); }
+          if (e.hp > 0) { e.st.frozen = e.boss ? 1 : F.has('deepfreeze') ? 3 : 2; this.say(t('lFrozen', this.ename(e))); }
         }
         break;
       }
@@ -893,26 +934,26 @@ export class Game {
         if (!spots.length) { this.say(t('lNoTarget')); return false; }
         this.emit({ t: 'fx', k: 'blink', x: p.x, y: p.y, x1: spots[0].x, y1: spots[0].y, shadow: true });
         p.x = spots[0].x; p.y = spots[0].y;
-        this.strike(p, target, { adv: true, mult: 2 });
+        this.strike(p, target, { adv: true, mult: F.has('twinfangs') ? 3 : 2 });
         break;
       }
       case 'venom':
         p.venom = 3; this.emit({ t: 'fx', k: 'venom', x: p.x, y: p.y });
         break;
       case 'smoke':
-        p.st.invis = 4; this.say(t('lInvis'), 'good'); this.emit({ t: 'fx', k: 'smoke', x: p.x, y: p.y });
+        p.st.invis = F.has('vanish') ? 6 : 4; this.say(t('lInvis'), 'good'); this.emit({ t: 'fx', k: 'smoke', x: p.x, y: p.y });
         for (const e of this.enemies) if (!e.ally) e.awake = false;
         break;
       // ---------- cleric ----------
       // Punizione is a bolt of light: it leaves your hand, so the first body in the way takes it
       case 'smite': {
-        const list = F.has('shatter') ? adjacent().concat(target && dist(target, p) === 1 ? [] : [target]) : [target];
+        const list = F.has('zeal') ? adjacent().concat(target && dist(target, p) === 1 ? [] : [target]) : [target];
         this.emit({ t: 'shot', a: p.id, d: target.id, k: 'holy', x0: p.x, y0: p.y, x1: target.x, y1: target.y });
         if (!list.length) { this.say(t('lNoTarget')); return false; }
         this.emit({ t: 'fx', k: 'cleave', x: p.x, y: p.y });
         for (const e of list) {
           const holy = ENEMIES[e.type].undead ? 2 : 1;
-          const mult = (F.has('deepfreeze') ? 1.3 : 1) * holy;
+          const mult = holy;
           this.strike(p, e, { sure: true, kind: 'spell', base: Math.round((rint(3, 7) + p.lvl + st.power + 4) * mult) });
         }
         break;
@@ -921,23 +962,25 @@ export class Game {
         if (p.hp >= st.maxHp && !p.st.poison && !p.st.burn) { this.say(t('lNoTarget')); return false; }
         this.heal(Math.max(10, Math.round(st.maxHp * 0.35)));
         p.st.poison = 0; p.st.burn = 0;
+        if (F.has('purgingfire')) for (const e of this.enemies) if (!e.ally && e.hp > 0 && dist(e, p) === 1) { e.st.burn = Math.max(e.st.burn || 0, 3); e.st.burnDmg = Math.max(e.st.burnDmg || 0, 3 + Math.floor(this.floor / 3)); }
         this.emit({ t: 'fx', k: 'level', x: p.x, y: p.y });
         break;
       }
       case 'sanctuary':
-        p.st.sanctuary = F.has('mastery') ? 6 : 4;
+        p.st.sanctuary = F.has('shelter') ? 6 : 4;
         this.say(t('lSanctuary'), 'good'); this.emit({ t: 'fx', k: 'ward', x: p.x, y: p.y });
         break;
       // ---------- paladin ----------
       case 'aegis':
-        this.shield(10 + p.lvl * 2);
+        this.shield(Math.round((10 + p.lvl * 2) * st.shieldMax * (F.has('shieldoffaith') ? 1.5 : 1)));
         break;
       case 'hammer': {
-        const cells = [target, ...this.enemies.filter((e) => !e.ally && e !== target && dist(e, p) === 1)];
+        const reach = F.has('earthshaker') ? 2 : 1;
+        const cells = [target, ...this.enemies.filter((e) => !e.ally && e !== target && dist(e, p) <= reach)];
         this.emit({ t: 'fx', k: 'cleave', x: p.x, y: p.y });
         for (const e of cells) {
-          if (this.strike(p, e, { sure: true, flat: F.has('deepfreeze') ? 6 : 3 }) && e.hp > 0) {
-            e.st.stun = e.boss ? 1 : (F.has('toxicity') ? 2 : 1);
+          if (this.strike(p, e, { sure: true, flat: F.has('earthshaker') ? 6 : 3 }) && e.hp > 0) {
+            e.st.stun = e.boss ? 1 : (F.has('shatterblow') ? 3 : 1);
             this.say(t('lStun', this.ename(e)));
           }
         }
@@ -972,9 +1015,10 @@ export class Game {
       }
       case 'snare':
         this.emit({ t: 'shot', a: p.id, d: target.id, k: 'web', x0: p.x, y0: p.y, x1: target.x, y1: target.y });
-        target.st.web = target.boss ? 1 : 3;
-        const dmg = Math.round((F.has('toxicity') ? 4 : 3) * st.trap);
-        this.poison(target, dmg, F.has('toxicity') ? 6 : 4);
+        target.st.web = target.boss ? 1 : F.has('pittrap') ? 5 : 3;
+        const venom = F.has('toxicity') || F.has('poisontrap');
+        const dmg = Math.round((venom ? 4 : 3) * st.trap * (F.has('poisontrap') ? 1.5 : 1));
+        this.poison(target, dmg, venom ? 6 : 4);
         this.say(t('lSnare', this.ename(target)), 'good');
         break;
       // the wolf comes out on the tile you tapped, so you can put it between yourself and an archer
@@ -1124,7 +1168,7 @@ export class Game {
         break;
       }
       case 'lightning': {
-        const e = this.visibleEnemies().sort((a, b) => dist(a, p) - dist(b, p))[0];
+        const e = this.visibleEnemies().filter((x) => !x.ally).sort((a, b) => dist(a, p) - dist(b, p))[0];
         if (!e) { this.say(t('lNoTarget')); return false; }
         this.emit({ t: 'shot', a: p.id, d: e.id, k: 'zap', x0: p.x, y0: p.y, x1: e.x, y1: e.y });
         this.strike(p, e, { sure: true, kind: 'spell', base: rint(16, 26) + this.floor * 3 });
@@ -1207,9 +1251,10 @@ export class Game {
       this.say(t('lBurn', n), 'bad');
       this.damage(p, n, false, 'burn');
     }
-    for (const k of ['stun', 'web', 'invis', 'sanctuary', 'consecrate']) if (p.st[k] > 0) p.st[k]--;
-    if (p.st.sanctuary > 0) this.heal(3, true);
-    if (p.st.consecrate > 0) {
+    for (const k of ['stun', 'web', 'invis', 'rage', 'cry', 'stoneskin']) if (p.st[k] > 0) p.st[k]--;
+    if (p.st.sanctuary > 0) { this.heal(3, true); p.st.sanctuary--; }
+    if (p.st.consecrate > 0 && !this.over) {
+      p.st.consecrate--;
       for (const e of this.enemies.filter((x) => !x.ally && dist(x, p) === 1)) {
         this.emit({ t: 'fx', k: 'explode', x: e.x, y: e.y });
         this.damage(e, p.st.consecrateDmg || 5, false, p);
@@ -1217,6 +1262,7 @@ export class Game {
     }
     if (this.has('blessing') && p.hp === st.maxHp) this.heal(2, true);
     if (st.regen && this.turn % 3 === 0) this.heal(st.regen, true);
+    if (st.regenRelic && !this.over) this.heal(1, true); // the Cold Heart at level 4: one HP every turn
     if (this.turn % 6 === 0 && !this.enemies.some((e) => e.awake)) this.heal(1, true);
     if (!this.over) this.enemyPhase();
     if (!this.over) this.hazardPhase();
@@ -1229,7 +1275,7 @@ export class Game {
     const dm = distanceMap(m, p.x, p.y);
     for (const e of [...this.enemies]) {
       if (e.hp <= 0 || this.over) continue;
-      for (const [k, kd] of [['burn', 'burnDmg'], ['poison', 'poisonDmg']]) {
+      for (const [k, kd] of [['burn', 'burnDmg'], ['poison', 'poisonDmg'], ['bleed', 'bleedDmg']]) {
         if (e.st[k] > 0 && e.hp > 0) {
           e.st[k]--;
           this.emit({ t: 'dot', id: e.id, k });
@@ -1238,10 +1284,12 @@ export class Game {
       }
       if (e.hp <= 0) continue;
       if (e.st.frozen > 0) { e.st.frozen--; continue; }
-      if (e.st.slow > 0) { e.st.slow = 0; e.st.slowNext = 1; continue; }
-      if (e.st.slowNext) { e.st.slowNext = 0; e.st.slow = 1; continue; }
+      // slowed: loses this turn, and cannot be slowed again before it has acted once
+      if (e.st.slow > 0) { e.st.slow = 0; e.st.slowed = 1; continue; }
+      e.st.slowed = 0;
       if (e.st.stun > 0) { e.st.stun--; continue; }
-      if (e.ally) { if (e.st.web > 0) { e.st.web--; continue; } this.petAct(e, dm); continue; }
+      if (e.st.web > 0) { e.st.web--; continue; } // caught in a snare
+      if (e.ally) { this.petAct(e, dm); continue; }
       e.energy += ENEMIES[e.type].speed || 1;
       while (e.energy >= 1 && e.hp > 0 && !this.over) { e.energy--; this.enemyAct(e, dm); }
       if (e.st.fear > 0) e.st.fear--;
@@ -1257,7 +1305,7 @@ export class Game {
       return;
     }
     const t0 = foes[0];
-    if (dist(t0, e) === 1) { this.strike(e, t0); return; }
+    if (dist(t0, e) === 1) { this.strike(e, t0); if (this.has('frenzy') && this.turn % 2 && t0.hp > 0) this.strike(e, t0); return; }
     if (dist(t0, e) <= 6) this.stepToward(e, t0);
     else if (dist(e, p) > 3) this.stepToward(e, p);
   }
@@ -1296,7 +1344,7 @@ export class Game {
 
   tuneWolf(e, F = this.flags()) {
     const p = this.player;
-    const c = (F.has('shelter') ? 1.35 : 1) * (F.has('packbond') ? 1.2 : 1);
+    const c = (F.has('shelter') ? 1.35 : 1) * (F.has('packbond') ? 1.2 : 1) * this.ps().petPower * (this.relic === 'totem' ? 1 + 0.15 * this.rl() : 1);
     e.maxHp = Math.round((14 + p.lvl * 4) * c);
     e.hp = Math.min(e.hp > 1 ? e.hp : e.maxHp, e.maxHp);
     e.hit = 4 + Math.floor(p.lvl / 2) + (F.has('shelter') ? 2 : 0);
@@ -1430,6 +1478,8 @@ export class Game {
   bossAct(e, d) {
     const p = this.player, m = this.map, half = e.hp < e.maxHp / 2, f = this.floor;
     for (const k of ['a', 'b', 'c']) if (e.cd[k] > 0) e.cd[k]--;
+    // at half health a boss hits a fifth harder, once, on top of what his floor already gives him
+    const enrage = () => { if (half && !e.enraged) { e.enraged = true; e.dmg = e.dmg.map((v) => Math.round(v * 1.2)); } };
     const around = (r) => { const out = []; for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) out.push({ x: p.x + x, y: p.y + y }); return out; };
     if (e.type === 'boneKing') {
       if (e.cd.a <= 0 && this.summon(e, 'skeleton', 2, 4)) { e.cd.a = 7; return true; }
@@ -1437,7 +1487,7 @@ export class Game {
         this.telegraph([{ x: p.x, y: p.y }, ...DIRS.slice(0, 4).map(([dx, dy]) => ({ x: p.x + dx, y: p.y + dy }))], rint(6, 10) + f, 'bone');
         e.cd.b = half ? 3 : 4; return true;
       }
-      if (half) e.dmg = [6, 12];
+      enrage();
     } else if (e.type === 'broodmother') {
       if (e.cd.a <= 0 && this.summon(e, 'spiderling', 2, 4)) { e.cd.a = 6; return true; }
       if (e.cd.b <= 0 && d > 1 && d <= 7 && los(m, e, p) && this.laneClear(e, p, 'web')) {
@@ -1475,7 +1525,7 @@ export class Game {
         this.say(t('lBurn', 6), 'bad');
         e.cd.c = 7; return true;
       }
-      if (half) e.dmg = [12, 20];
+      enrage();
     } else if (e.type === 'frostQueen') {
       // freezes the ground under the hero, and calls the drowned when the ice breaks
       if (e.cd.b <= 0 && d <= 8 && los(m, e, p) && this.laneClear(e, p, 'bolt')) {
@@ -1503,7 +1553,51 @@ export class Game {
         this.say(t('lStunned'), 'bad');
         e.cd.c = 6; return true;
       }
-      if (half) e.dmg = [15, 24];
+      enrage();
+    } else if (e.type === 'drownedDrake') {
+      // breathes frost down a straight line that stops at the first wall, sinks when you close in, calls the drowned
+      if (d <= 1 && e.cd.c <= 0) {
+        const spots = this.freeCells(0).filter((c) => this.vis[c.y * m.w + c.x] && dist(c, p) >= 4 && dist(c, p) <= 7);
+        if (spots.length) {
+          const c = pick(spots);
+          this.emit({ t: 'fx', k: 'blink', x: e.x, y: e.y, x1: c.x, y1: c.y });
+          e.x = c.x; e.y = c.y; e.cd.c = half ? 5 : 7; return true;
+        }
+      }
+      if (e.cd.b <= 0 && d <= 7 && los(m, e, p)) {
+        const dx = p.x - e.x, dy = p.y - e.y, k = Math.max(Math.abs(dx), Math.abs(dy)) || 1, cells = [];
+        for (let i = 1; i <= 10; i++) {
+          const c = { x: e.x + Math.round((dx * i) / k), y: e.y + Math.round((dy * i) / k) };
+          if (tile(m, c.x, c.y) === WALL) break;
+          cells.push(c);
+        }
+        this.telegraph(cells, rint(18, 26), 'frost');
+        e.cd.b = half ? 3 : 4; return true;
+      }
+      if (e.cd.a <= 0 && this.summon(e, 'drowned', half ? 2 : 1, 3)) { e.cd.a = 8; return true; }
+    } else if (e.type === 'ashWyrm') {
+      // beats its wings: ash falls around the hero; the cinders it sheds hunt; up close, it sets you alight
+      if (e.cd.a <= 0 && this.summon(e, half ? 'emberling' : 'cinderHound', half ? 3 : 1, half ? 6 : 2)) { e.cd.a = 7; return true; }
+      if (e.cd.b <= 0 && d <= 8) {
+        this.telegraph(around(3).filter(() => chance(half ? 0.4 : 0.25)).concat([{ x: p.x, y: p.y }]), rint(20, 28), 'fire');
+        e.cd.b = half ? 3 : 4; return true;
+      }
+      if (half && e.cd.c <= 0 && d <= 2) {
+        p.st.burn = Math.max(p.st.burn || 0, 3); p.st.burnDmg = 8;
+        this.say(t('lBurn', 8), 'bad');
+        e.cd.c = 6; return true;
+      }
+      enrage();
+    } else if (e.type === 'warden') {
+      // the bars of the door: a cross through the hero, then an X, turn after turn. A step to the side always clears it.
+      if (e.cd.a <= 0 && this.summon(e, half ? 'paleGolem' : 'hollow', half ? 1 : 2, half ? 2 : 4)) { e.cd.a = 8; return true; }
+      if (e.cd.b <= 0 && d <= 8) {
+        const r = half ? 5 : 3, lines = e.flip ? DIRS.slice(4) : DIRS.slice(0, 4), cells = [{ x: p.x, y: p.y }];
+        for (const [dx, dy] of lines) for (let i = 1; i <= r; i++) cells.push({ x: p.x + dx * i, y: p.y + dy * i });
+        e.flip = !e.flip;
+        this.telegraph(cells, rint(22, 30), 'bone');
+        e.cd.b = half ? 3 : 4; return true;
+      }
     }
     return false;
   }

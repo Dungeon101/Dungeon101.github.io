@@ -280,7 +280,7 @@ export const TALENTS = {
       { id: 'A7b', name: { en: "Inner Furnace", it: "Fornace interiore" }, desc: { en: "+8 max mana", it: "+8 mana massimo" }, eff: { 'pool': 8 } },
       { id: 'A8', name: { en: "Ashen Step", it: "Passo di cenere" }, desc: { en: "+2 armor +1 to hit", it: "+2 armatura +1 a colpire" }, eff: { 'ac': 2, 'hit': 1 } },
       { id: 'A8b', name: { en: "Heat Wave", it: "Ondata di calore" }, desc: { en: "Spells and holy blows +25% damage", it: "Incantesimi e colpi sacri +25% danni" }, eff: { 'spell': 25 } },
-      { id: 'A9', name: { en: "Pyre", it: "Pira" }, desc: { en: "Burning never goes out below 3 turns", it: "Le fiamme non scendono sotto i 3 turni" }, eff: { 'flag:pyre': 1 } },
+      { id: 'A9', name: { en: "Pyre", it: "Pira" }, desc: { en: "Your fires burn 2 turns longer", it: "I tuoi fuochi bruciano 2 turni in più" }, eff: { 'flag:pyre': 1 } },
       { id: 'A9b', name: { en: "Everburning", it: "Sempre accesa" }, desc: { en: "+3 damage", it: "+3 danni" }, eff: { 'power': 3 } },
       { id: 'A10', name: { en: "Sunfire", it: "Fuoco solare" }, desc: { en: "Spells and holy blows +45% damage +3 damage", it: "Incantesimi e colpi sacri +45% danni +3 danni" }, eff: { 'spell': 45, 'power': 3 } },
       { id: 'A10b', name: { en: "Phoenix", it: "Fenice" }, desc: { en: "Once per run, you come back at half HP", it: "Una volta per partita ti rialzi con metà dei PV" }, eff: { 'flag:miracle': 1 } },
@@ -905,11 +905,11 @@ export const ENEMIES = {
   firstKing: { art: 'boss-first-king', boss: true, name: { en: 'The First King', it: 'Il Primo Re' }, title: { en: 'Who Built the Stairs', it: 'Colui che scavò le scale' },
     hp: 560, ac: 19, hit: 14, dmg: [11, 19], xp: 900, ai: 'melee' },
   // the small dragons that come with the second half of the descent, and the last door
-  drownedDrake: { art: 'boss-broodmother', boss: true, name: { en: 'The Drowned Drake', it: 'Il Draco Annegato' }, title: { en: 'What Sinks Without Dying', it: 'Ciò che affonda senza morire' },
+  drownedDrake: { art: 'boss-drowned-drake', boss: true, name: { en: 'The Drowned Drake', it: 'Il Draco Annegato' }, title: { en: 'What Sinks Without Dying', it: 'Ciò che affonda senza morire' },
     hp: 620, ac: 18, hit: 13, dmg: [10, 17], xp: 760, ai: 'ranged', range: 7, shot: 'frost' },
-  ashWyrm: { art: 'boss-chain-lord', boss: true, name: { en: 'The Ash Wyrm', it: 'Il Verme di Cenere' }, title: { en: 'The Furnace With Wings', it: 'La fornace con le ali' },
+  ashWyrm: { art: 'boss-ash-wyrm', boss: true, name: { en: 'The Ash Wyrm', it: 'Il Verme di Cenere' }, title: { en: 'The Furnace With Wings', it: 'La fornace con le ali' },
     hp: 820, ac: 19, hit: 15, dmg: [12, 20], xp: 1000, ai: 'melee', onHit: 'burn' },
-  warden: { art: 'boss-first-king', boss: true, name: { en: 'The Last Warden', it: 'L\'Ultimo Custode' }, title: { en: 'Who Kept the Door', it: 'Colui che custodiva la porta' },
+  warden: { art: 'boss-last-warden', boss: true, name: { en: 'The Last Warden', it: 'L\'Ultimo Custode' }, title: { en: 'Who Kept the Door', it: 'Colui che custodiva la porta' },
     hp: 1050, ac: 20, hit: 16, dmg: [13, 21], xp: 1400, ai: 'melee' },
 };
 
@@ -1033,7 +1033,7 @@ export const UPGRADES = [
   { id: 'firstblood', g: 'gear', icon: 'crosshair', max: 5, cost: [30, 69, 130, 218, 352], name: { en: 'First Blood', it: 'Primo sangue' }, desc: { en: '+2 damage against untouched enemies, per level.', it: '+2 danni contro nemici ancora illesi, per livello.' } },
   { id: 'companion', g: 'gear', icon: 'paw-print', max: 5, cost: [30, 69, 130, 218, 352], name: { en: 'Companion', it: 'Compagno' }, desc: { en: 'The wolf is 20% stronger per level.', it: 'Il lupo è il 20% più forte per livello.' } },
   { id: 'sanctuary', g: 'body', icon: 'church', max: 5, cost: [30, 69, 130, 218, 352], name: { en: 'Sanctuary', it: 'Santuario' }, desc: { en: 'Every floor starts with 4% of your HP healed per level.', it: 'Ogni piano inizi con il 4% dei PV curati per livello.' } },
-  { id: 'fountain', g: 'body', icon: 'waves', max: 5, cost: [30, 69, 130, 218, 352], name: { en: 'Sweet Water', it: 'Acqua dolce' }, desc: { en: 'Fountains heal 20% more per level.', it: 'Le fontane curano il 20% in più per livello.' } },
+  { id: 'fountain', g: 'body', icon: 'waves', max: 5, cost: [30, 69, 130, 218, 352], name: { en: 'Sweet Water', it: 'Acqua dolce' }, desc: { en: 'A fountain also shields you for 20% of your health per level.', it: 'Una fontana ti dà anche uno scudo pari al 20% della vita per livello.' } },
   { id: 'vendetta', g: 'delve', icon: 'sword', max: 5, cost: [30, 69, 130, 218, 352], name: { en: 'Vendetta', it: 'Vendetta' }, desc: { en: '+10% damage on the floor where you died last run, per level.', it: '+10% danni sul piano dove sei morto la volta prima, per livello.' } },
   { id: 'ward', g: 'body', icon: 'shield', max: 5, cost: [30, 69, 130, 218, 352], name: { en: 'Ward', it: 'Protezione' }, desc: { en: 'Start every floor with 5 shield per level.', it: 'Ogni piano inizi con 5 di scudo per livello.' } },
   { id: 'resist', g: 'body', icon: 'heart', max: 5, cost: [30, 69, 130, 218, 352], name: { en: 'Hardened', it: 'Temprato' }, desc: { en: 'Poison and burn last 1 turn less per level.', it: 'Veleno e fuoco durano 1 turno in meno per livello.' } },
@@ -1072,7 +1072,7 @@ export const RELICS = {
   key: { boss: 'warden', icon: 'key', name: { en: 'Last Key', it: 'Ultima chiave' },
     desc: { en: 'Start every floor with 10% more HP a level.', it: 'Ogni piano inizi con il 10% di PV in più a livello.' }, per: { en: '+10% max HP', it: '+10% PV massimi' } },
   seal: { boss: 'firstKing', icon: 'sparkles', name: { en: 'Broken Seal', it: 'Sigillo spezzato' },
-    desc: { en: 'Talents cost one point less at level 4, and you start with an extra point every two levels.', it: 'I talenti costano un punto in meno al 4, e parti con un punto in più ogni due livelli.' }, per: { en: 'extra talent points', it: 'punti talento in più' } },
+    desc: { en: 'You start with an extra talent point, and one more at levels 3 and 5.', it: 'Parti con un punto talento in più, e un altro ai livelli 3 e 5.' }, per: { en: 'extra talent points', it: 'punti talento in più' } },
 };
 
 export const RELIC_MAX = 5;

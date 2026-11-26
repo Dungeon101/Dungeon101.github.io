@@ -1,6 +1,6 @@
 // Screens, HUD, overlays and input. Wires the rules (game.js) to the renderer and to saving.
 import { CLASSES, SKILLS, TALENTS, BRANCHES, ENEMIES, RELIC_MAX, RARITIES, UPGRADES, UP_GROUPS, RELICS, CONSUMABLES, SLOT_ICON, HERO_NAMES, actOf, isBossFloor, FLOORS } from './data.js';
-import { Game, itemName, itemLines, itemScore, itemCompare, statLabel, statShort, xpNext, SPEC_MAX, SPEC_LVL } from './game.js';
+import { Game, itemName, itemLines, itemScore, itemCompare, statLabel, statShort, SPEC_MAX, SPEC_LVL } from './game.js';
 import { Renderer } from './render.js';
 import { path as findPath, walkable, DIRS, dist } from './dungeon.js';
 import { t, L, lang, setLang } from './i18n.js';
@@ -131,10 +131,11 @@ function renderSanctuary() {
   };
   const shelf = (gid, ic, nm, list) => {
     const have = list.filter((u) => lv(u.id) > 0), rest = list.filter((u) => !lv(u.id));
+    const can = list.filter((u) => lv(u.id) < u.max && meta.embers >= u.cost[lv(u.id)]).length;
     const open = upTab === gid;
     return `<div class="shelf ${open ? 'open' : ''}">
       <button class="shelfhead" data-shelf="${gid}">${icon_(ic)}<b>${L(nm)}</b>
-        <small>${have.length}/${list.length}${open || have.length ? '' : ` · ${t('shelfNone')}`}</small>${icon_(open ? 'chevrons-down' : 'chevrons-right')}</button>
+        <small>${have.length}/${list.length}${can ? ` · <b class="gold">${t('shelfCan', can)}</b>` : open || have.length ? '' : ` · ${t('shelfNone')}`}</small>${icon_(open ? 'chevrons-down' : 'chevrons-right')}</button>
       ${open ? `<div class="upgrades">${[...have.sort((a, b) => lv(b.id) - lv(a.id)), ...rest].map(card).join('')}</div>` : ''}
     </div>`;
   };
@@ -186,7 +187,6 @@ function newRun() {
   if (heirloom) meta.vault = null;
   saveMeta(meta); pushMeta();
   const run = Game.create({ cls: pick.cls, name, relic: pick.relic, relicLvl: pick.relic ? meta.relics[pick.relic] || 1 : 1, heirloom, meta });
-  if (CLASSES[pick.cls].skills.includes('beast')) run.useSkill('beast'); // the hunter's wolf is there from the first turn
   run.ev.length = 0;
   startRun(run);
   saveRun(g);
@@ -218,7 +218,7 @@ function after() {
     if (e.t === 'boss') bossIntro(e.id);
     if (e.t === 'shop') setTimeout(() => { if (!g.over && !overlay) shop(); }, 260);
     if (e.t === 'level') toast(`${t('levelUp', e.lvl)} <small>${t('talentPoint')}</small>`, 'gold');
-    if ((e.t === 'atk' || e.t === 'shot') && (e.a === g.player.id ? e.d : e.a) !== g.player.id) focusId = e.a === g.player.id ? e.d : e.a;
+    if ((e.t === 'atk' || e.t === 'shot') && (e.a === g.player.id || e.d === g.player.id)) focusId = e.a === g.player.id ? e.d : e.a;
     if (e.t === 'fx' && e.k === 'pickup' && e.it.slot !== 'use') toast(`${icon(SLOT_ICON[e.it.slot])} <span style="color:${RARITIES[e.it.rarity].color}">${esc(t('newItem', itemName(e.it)))}</span>`);
   }
   if (g.over) { walk = null; targeting = null; R.targets = null; R.path = null; return endRun(); }
@@ -278,7 +278,7 @@ function endRun() {
         </div>
         <p class="embers">${icon('flame')} ${t('embersEarned', res.embers)} <small>${t('endEmbersTotal', meta.embers)}</small></p>
         ${gifts.map((g2) => `<p class="relic-new">${g2}</p>`).join('')}
-        ${meta.embers >= cheapestUpgrade() ? `<p class="muted">${icon('flame')} ${t('endCanBuy', cheapestUpgrade())}</p>` : ''}
+        ${cheapestUpgrade() ? `<p class="muted">${icon('flame')} ${t('endCanBuy', cheapestUpgrade())}</p>` : ''}
         <div class="actions"><button class="btn" data-go="title">${t('menu')}</button><button class="btn" data-go="sanctuary">${icon('flame')}<span>${t('toSanctuary')}</span></button><button class="btn gold" data-go="new">${icon('swords')}<span>${t('again')}</span></button></div>
       </div>`, true);
   }, res.win ? 2400 : 1700);
@@ -297,7 +297,7 @@ function cheapestUpgrade() {
 }
 
 // Italian: "da" + article becomes "dal", "dalla", "dall'"
-const byName = (n) => (lang !== 'it' ? n : n === 'Veleno' ? 'l veleno' : /^Il /.test(n) ? n.replace(/^Il /, 'l ') : /^La /.test(n) ? n.replace(/^La /, 'lla ') : /^L'/.test(n) ? n.replace(/^L'/, "ll'") : ' ' + n);
+const byName = (n) => (lang !== 'it' ? n : n === 'Veleno' ? 'l veleno' : n === 'Fiamme' ? 'lle fiamme' : /^Il /.test(n) ? n.replace(/^Il /, 'l ') : /^La /.test(n) ? n.replace(/^La /, 'lla ') : /^L'/.test(n) ? n.replace(/^L'/, "ll'") : ' ' + n);
 
 function useSkill(id) {
   if (!g || g.over || overlay) return;
@@ -314,7 +314,7 @@ function useSkill(id) {
   if (sk.target === 'enemy') { targeting = { id, list, sel: list[0] }; R.targets = { list, sel: list[0] }; $('#hint').textContent = t('targetHint'); $('#hint').classList.add('on'); hud(); return; }
   let sel = list[0];
   if (sk.target === 'tile') { // default: the reachable tile farthest from the closest enemy
-    const foes = g.visibleEnemies();
+    const foes = g.visibleEnemies().filter((e) => !e.ally);
     const score = (c) => (foes.length ? Math.min(...foes.map((e) => dist(e, c))) : 0) * 10 + dist(c, g.player);
     sel = [...list].sort((a, b) => score(b) - score(a))[0];
   }
@@ -348,16 +348,16 @@ function tapTile(tx, ty) {
   if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1) { act({ type: 'move', dx, dy }); return; }
   if (!m.seen[ty * m.w + tx]) return;
   const enemy = g.enemyAt(tx, ty);
-  const route = findPath(m, p, { x: tx, y: ty }, (x, y) => !m.seen[y * m.w + x] || ((g.enemyAt(x, y) || g.chestAt(x, y)) && !(x === tx && y === ty)));
+  const route = findPath(m, p, { x: tx, y: ty }, (x, y) => !m.seen[y * m.w + x] || (((g.enemyAt(x, y) && !g.enemyAt(x, y).ally) || g.chestAt(x, y)) && !(x === tx && y === ty)));
   if (!route) return;
-  walk = { route, enemies: new Set(g.visibleEnemies().map((e) => e.id)), hp: p.hp, attack: !!enemy, next: 0 };
+  walk = { route, enemies: new Set(g.visibleEnemies().map((e) => e.id)), hp: p.hp, attack: !!enemy && !enemy.ally, next: 0 };
   R.path = route;
 }
 
 function stepWalk(now) {
   if (!walk || now < walk.next || !g || overlay) return;
   const p = g.player;
-  const fresh = g.visibleEnemies().some((e) => !walk.enemies.has(e.id) || (e.awake && !walk.attack));
+  const fresh = g.visibleEnemies().filter((e) => !e.ally).some((e) => !walk.enemies.has(e.id) || (e.awake && !walk.attack));
   if (!walk.route.length || p.hp < walk.hp || (fresh && !walk.attack)) { walk = null; R.path = null; return; }
   const s = walk.route[0];
   const before = p.x + ',' + p.y;
@@ -376,7 +376,7 @@ function hud() {
   $('#hero .name').textContent = p.name;
   $('#hero .lvl').textContent = t('level', p.lvl);
   setBar('#hp', p.hp, st.maxHp, `${p.hp} / ${st.maxHp}`);
-  setBar('#xp', p.xp, xpNext(p.lvl), '');
+  setBar('#xp', p.xp, g.xpToNext(), '');
   setBar('#mp', p.mp, g.manaPool(), `${p.mp} / ${g.manaPool()}`);
   $('#mp').classList.toggle('low', p.mp < g.manaRegen());
   const sts = [];
@@ -414,7 +414,7 @@ function hud() {
   if (boss) { $('#bossbar .n').textContent = L(ENEMIES[boss.type].name); setBar('#bossbar', boss.hp, boss.maxHp, ''); }
   // focus: the last enemy you traded blows with, else the closest awake one
   let f = g.enemies.find((e) => e.id === focusId && g.vis[e.y * g.map.w + e.x] && !e.boss);
-  if (!f) f = g.visibleEnemies().filter((e) => e.awake && !e.boss).sort((a, b) => dist(a, p) - dist(b, p))[0];
+  if (!f) f = g.visibleEnemies().filter((e) => e.awake && !e.boss && !e.ally).sort((a, b) => dist(a, p) - dist(b, p))[0];
   $('#focus').classList.toggle('on', !!f);
   if (f) {
     $('#focus .face').src = `assets/img/${ENEMIES[f.type].art}.webp`;
@@ -606,13 +606,13 @@ function pauseMenu() {
     <span>${icon('castle')}${t('floorOf', g.floor, FLOORS)}</span>
     <span>${icon('skull')}${g.stats.kills}</span>
     <span>${icon('coins')}${p.gold}</span>
-    <span>${icon('sparkles')}${p.points ? `${p.points} ${t('pointsShort')}` : t('talents')}</span></div>` : '';
+    <span>${icon('sparkles')}${p.points ? t('points', p.points) : t('talents')}</span></div>` : '';
   openOverlay('pause', `
     <h2>${t('pause')}</h2>
     ${stat}
     <div class="menu">
       <button class="btn gold" data-go="close">${icon('play')}<span>${t('resume')}</span></button>
-      ${p ? `<button class="btn" data-go="tal">${icon('sparkles')}<span>${t('talents')}</span><small>${p.points ? `${p.points} ${t('pointsShort')}` : ''}</small></button>
+      ${p ? `<button class="btn" data-go="tal">${icon('sparkles')}<span>${t('talents')}</span><small>${p.points ? t('points', p.points) : ''}</small></button>
       <button class="btn" data-go="inv">${icon('backpack')}<span>${t('inventory')}</span></button>
       <button class="btn" data-go="map">${icon('map')}<span>${t('map')}</span></button>` : ''}
       <button class="btn" data-go="sound">${icon(soundOn() ? 'volume-2' : 'volume-x')}<span>${t('sound')}: ${t(soundOn() ? 'on' : 'off')}</span></button>
