@@ -397,8 +397,9 @@ function hud() {
     const sk = SKILLS[id], k = known.includes(id), cd = p.cds[id] || 0, cost = g.skillCost(id), poor = k && !cd && p.mp < cost;
     const why = !k ? 'locked' : cd ? 'cool' : poor ? 'poor' : '';
     // the name gets two lines, and a name too long for them shrinks instead of turning into "..."
-    const nm = L(sk.name);
-    return `<button class="act ${why} ${targeting?.id === id ? 'aim' : ''} ${nm.length > 17 ? 'long' : ''}" data-skill="${id}" ${!k ? 'disabled' : ''} title="${esc(nm + ' · ' + L(sk.desc))}" aria-label="${esc(nm)}">
+    const nm = L(sk.name), word = Math.max(...nm.split(' ').map((w) => w.length));
+    const fit = word > 12 ? 'xlong' : nm.length > 17 || word > 9 ? 'long' : ''; // a word never breaks in the middle
+    return `<button class="act ${why} ${targeting?.id === id ? 'aim' : ''} ${fit}" data-skill="${id}" ${!k ? 'disabled' : ''} title="${esc(nm + ' · ' + L(sk.desc))}" aria-label="${esc(nm)}">
       <kbd>${i + 1}</kbd>${icon(k ? sk.icon : 'lock')}
       ${cd ? `<em class="cd">${cd}</em>` : k ? `<em class="cost ${poor ? 'poor' : ''}" title="${t('mana')}">${cost}</em>` : ''}
       <span>${nm}</span></button>`;

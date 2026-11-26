@@ -212,9 +212,10 @@ tr.win td { color: var(--gold); }
 }
 .act .ico { width: 24px; height: 24px; color: var(--gold); flex: none; }
 /* il nome dell'abilità su due righe: dentro il pulsante, mai tagliato con i puntini */
-.act span { font-size: 9.5px; line-height: 1.15; width: 100%; padding: 0 4px; text-align: center; color: var(--muted);
+.act span { font-size: 9.5px; line-height: 1.15; width: 100%; padding: 0 2px; text-align: center; color: var(--muted);
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; hyphens: auto; }
 .act.long span { font-size: 8.5px; }
+.act.xlong span { font-size: 7.8px; }
 .act .ico, .act kbd, .act em { flex: none; }
 .act kbd { position: absolute; top: 3px; left: 5px; font: 600 9px var(--body); color: var(--muted); }
 /* il costo in mana sta in alto a destra, la ricarica al centro, le cariche in basso a destra:

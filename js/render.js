@@ -530,14 +530,14 @@ export class Renderer {
       if (v.flash > 0) { c.fillStyle = `rgba(255,255,255,${v.flash * 0.75})`; c.fill(); }
       c.restore();
       c.lineWidth = e.boss ? 4 : 3;
-      c.strokeStyle = isP ? d.color : e.boss ? '#ff5a3c' : e.elite ? '#c47bff' : '#9b2c2c';
+      c.strokeStyle = isP ? d.color : e.ally ? '#5ee08a' : e.boss ? '#ff5a3c' : e.elite ? '#c47bff' : '#9b2c2c'; // the wolf is on your side: green
       c.beginPath(); c.arc(X, Y, r, 0, 7); c.stroke();
       c.strokeStyle = 'rgba(0,0,0,0.6)'; c.lineWidth = 1; c.beginPath(); c.arc(X, Y, r + 2, 0, 7); c.stroke();
       // health bar under hurt enemies
       if (!isP && e.hp < e.maxHp && !v.dead) {
         const w = r * 1.7, hy = Y + r + 5;
         c.fillStyle = 'rgba(0,0,0,0.7)'; c.fillRect(X - w / 2 - 1, hy - 1, w + 2, 6);
-        c.fillStyle = e.boss ? '#ff5a3c' : '#e04848'; c.fillRect(X - w / 2, hy, w * Math.max(0, e.hp / e.maxHp), 4);
+        c.fillStyle = e.ally ? '#5ee08a' : e.boss ? '#ff5a3c' : '#e04848'; c.fillRect(X - w / 2, hy, w * Math.max(0, e.hp / e.maxHp), 4);
       }
       // statuses
       const icons = [];
@@ -714,7 +714,7 @@ export class Renderer {
     }
     const dot = (x, y, col, r = 1) => { c.fillStyle = col; c.fillRect(x * s - (r - 1) * s / 2, y * s - (r - 1) * s / 2, s * r, s * r); };
     if (g.stairsOpen && m.seen[m.stairs.y * m.w + m.stairs.x]) dot(m.stairs.x, m.stairs.y, '#ffd36b', 2);
-    for (const e of g.enemies) if (g.vis[e.y * m.w + e.x]) dot(e.x, e.y, e.boss ? '#ff5a3c' : '#e04848', e.boss ? 2 : 1);
+    for (const e of g.enemies) if (g.vis[e.y * m.w + e.x]) dot(e.x, e.y, e.ally ? '#5ee08a' : e.boss ? '#ff5a3c' : '#e04848', e.boss ? 2 : 1);
     dot(g.player.x, g.player.y, '#ffffff', 2);
   }
 }
